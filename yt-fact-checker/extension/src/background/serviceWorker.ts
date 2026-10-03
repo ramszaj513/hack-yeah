@@ -117,7 +117,15 @@ async function applyEvent(
     return;
   }
 
-  await setState({ status: "failed", error: event.message, warnings: [] });
+  if (event.type === "error") {
+    await setState({ status: "failed", error: event.message, warnings: [] });
+    return;
+  }
+
+  // Anything else is a kind of event this build does not know about. Ignoring
+  // it keeps an older extension working against a newer backend; treating the
+  // unknown as a failure, as this once did, meant adding a field to the stream
+  // broke every client that had not been reloaded.
 }
 
 async function readStream(
