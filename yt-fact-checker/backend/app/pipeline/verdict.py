@@ -105,6 +105,21 @@ Rules:
   BWRX-300" is not the claim "the first permit for any reactor", and refuting
   the second leaves the first untouched. Do not widen or narrow a claim and
   then disagree with the version you produced.
+- When a claim reports what ONE named study, review or meta-analysis found,
+  only that study can settle it. Other studies reaching other conclusions do
+  not make it false — they study something else, often under different
+  conditions. If the excerpts do not cover the study named, return
+  couldnt_verify. Reporting a specific finding accurately is not an error just
+  because the wider literature is mixed.
+- Experimental conditions are part of the population. During exercise is not
+  after exercise; dehydrated subjects are not euhydrated ones; a dose or
+  formulation is not another one. Evidence from different conditions does not
+  contradict the claim, it is simply about something else.
+- Before calling a number wrong, convert units and check it is not the same
+  quantity expressed differently. Sodium and salt differ by a factor of about
+  2.54 — 3.27 g of sodium IS 8.3 g of salt. Grams against milligrams, per day
+  against per week, and one currency against another work the same way. A
+  conversion is agreement, not contradiction.
 - Where a phrase has more than one reading and one of them makes the claim
   absurd, take the reading its audience would. "Polish capital is investing"
   in a story about investors means Polish money, not the city of Warsaw. The
