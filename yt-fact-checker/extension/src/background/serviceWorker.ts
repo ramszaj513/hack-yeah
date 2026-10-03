@@ -38,7 +38,7 @@ async function sendMarkers(tabId: number | undefined, response: AnalysisResponse
   }
 }
 
-async function checkVideo(video: VideoMetadata, transcript: RuntimeMessage & { type: "TRANSCRIPT_READY" }, tabId?: number): Promise<void> {
+async function checkVideo(video: VideoMetadata, url: string, tabId?: number): Promise<void> {
   await setState({ video, status: "extracting_claims", claims: [], warnings: [], error: undefined });
   await setState({ status: "gathering_evidence" });
 
@@ -46,7 +46,7 @@ async function checkVideo(video: VideoMetadata, transcript: RuntimeMessage & { t
     const response = await fetch(`${API_BASE_URL}/api/v1/check`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ video, transcript: transcript.transcript }),
+      body: JSON.stringify({ video, url }),
     });
 
     if (!response.ok) throw new Error(`Backend returned ${response.status}`);
@@ -83,24 +83,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   if (message.type === "CHECK_STARTED") {
     void setState({ video: message.video, status: "loading_transcript", claims: [], warnings: [], mode: undefined, error: undefined });
     void openSidePanel(sender.tab?.id);
-    return false;
-  }
-
-  if (message.type === "TRANSCRIPT_READY") {
-    void checkVideo(message.video, message, sender.tab?.id);
-    return false;
-  }
-
-  if (message.type === "NO_TRANSCRIPT") {
-    void setState({
-      video: message.video,
-      status: "no_transcript",
-      claims: [],
-      warnings: ["This video cannot be checked because no usable transcript is available. Speech-to-text is not used."],
-      mode: "live",
-      error: undefined,
-    });
-    void openSidePanel(sender.tab?.id);
+    void checkVideo(message.video, message.url, sender.tab?.id);
     return false;
   }
 

@@ -87,25 +87,11 @@ async function fetchTranscript(videoId: string): Promise<TranscriptSegment[] | n
   return segments.length > 0 ? segments : null;
 }
 
-async function startCheck(): Promise<void> {
+function startCheck(): void {
   const videoId = getVideoId();
   if (!videoId) return;
-  const video = getVideoMetadata(videoId);
-  send({ type: "CHECK_STARTED", video });
-  setButtonState("Reading captions…", true);
-  try {
-    const transcript = await fetchTranscript(videoId);
-    if (!transcript) {
-      send({ type: "NO_TRANSCRIPT", video });
-      setButtonState("No captions found", false);
-      return;
-    }
-    send({ type: "TRANSCRIPT_READY", video, transcript });
-    setButtonState("Checking…", true);
-  } catch {
-    send({ type: "NO_TRANSCRIPT", video });
-    setButtonState("Could not read captions", false);
-  }
+  send({ type: "CHECK_STARTED", video: getVideoMetadata(videoId), url: window.location.href });
+  setButtonState("Checking…", true);
 }
 
 function setButtonState(label: string, disabled: boolean): void {
@@ -120,7 +106,7 @@ function injectCheckButton(): void {
   checkButton.className = "ytf-check-button";
   checkButton.type = "button";
   checkButton.textContent = "Check this video";
-  checkButton.addEventListener("click", () => void startCheck());
+  checkButton.addEventListener("click", () => startCheck());
   document.body.append(checkButton);
 }
 
@@ -175,7 +161,7 @@ function handleNavigation(): void {
 
 chrome.runtime.onMessage.addListener((message: any) => {
   if (message.type === "RENDER_MARKERS") renderMarkers(message.claims as Claim[]);
-  if (message.type === "START_CHECK") void startCheck();
+  if (message.type === "START_CHECK") startCheck();
   if (message.type === "SEEK_TO") {
     const video = document.querySelector<HTMLVideoElement>("video");
     if (video) video.currentTime = message.seconds;

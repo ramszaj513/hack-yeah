@@ -2,7 +2,7 @@
 
 A Chrome/Chromium extension that helps viewers inspect factual claims in YouTube videos.
 
-The viewer chooses **Check this video**. The extension uses available English YouTube captions—never speech-to-text—and sends the timestamped transcript to a FastAPI backend. Results are claim-level verdicts with evidence links. False, potentially false, and misleading claims receive distinct markers on the YouTube timeline.
+The viewer chooses **Check this video**. The extension sends the video URL to a FastAPI backend, which fetches public English captions with `youtube-transcript-api`. Speech-to-text is not used. Results are claim-level verdicts with evidence links. False, potentially false, and misleading claims receive distinct markers on the YouTube timeline.
 
 ## Current implementation
 

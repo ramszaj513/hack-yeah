@@ -71,9 +71,7 @@ export interface SessionState {
 }
 
 export type RuntimeMessage =
-  | { type: "CHECK_STARTED"; video: VideoMetadata }
-  | { type: "TRANSCRIPT_READY"; video: VideoMetadata; transcript: TranscriptSegment[] }
-  | { type: "NO_TRANSCRIPT"; video: VideoMetadata }
+  | { type: "CHECK_STARTED"; video: VideoMetadata; url: string }
   | { type: "VIDEO_CHANGED"; video: VideoMetadata | null }
   | { type: "MARKER_CLICK"; claimId: string; startSeconds: number }
   | { type: "GET_STATE" }

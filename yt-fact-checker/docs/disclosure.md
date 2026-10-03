@@ -9,7 +9,7 @@ The repository contains a new hackathon implementation of the extension and back
 
 ## External data and sources
 
-- YouTube captions supplied by the video page after the viewer explicitly starts a check.
+- YouTube captions fetched on the backend with the no-key `youtube-transcript-api` library after the viewer explicitly starts a check. The library reads public caption tracks, including auto-generated English captions. It does not transcribe audio.
 - Demo evidence links point to public U.S. National Archives and Congress.gov pages.
 - Live Google Fact Check Tools integration is optional and requires the team's own API key.
 

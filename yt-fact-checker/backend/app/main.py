@@ -9,6 +9,7 @@ from app.config import settings
 from app.models.schemas import CheckRequest, CheckResponse
 from app.pipeline.analysis import analyze_live
 from app.pipeline.evidence import configured_provider
+from app.pipeline.transcript import TranscriptUnavailable, fetch_english_transcript
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,15 +35,23 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+NO_TRANSCRIPT = "This video cannot be checked because no usable English transcript is available. Speech-to-text is not used."
+
+
 @app.post("/api/v1/check", response_model=CheckResponse)
 async def check_video(request: CheckRequest) -> CheckResponse:
     if not request.transcript:
-        return CheckResponse(
-            analysisId=str(uuid4()),
-            status="no_transcript",
-            mode="live",
-            warnings=["This video cannot be checked because no usable transcript is available. Speech-to-text is not used."],
-        )
+        try:
+            request.transcript = fetch_english_transcript(request.video.id)
+        except TranscriptUnavailable:
+            return CheckResponse(
+                analysisId=str(uuid4()),
+                status="no_transcript",
+                mode="live",
+                warnings=[NO_TRANSCRIPT],
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail="Could not fetch the YouTube transcript.") from exc
 
     if settings()["demo_mode"]:
         return load_demo_response()

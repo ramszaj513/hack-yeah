@@ -36,7 +36,8 @@ class VideoMetadata(BaseModel):
 
 class CheckRequest(BaseModel):
     video: VideoMetadata
-    transcript: list[TranscriptSegment] = Field(max_length=2000)
+    url: str = Field(default="", max_length=500)
+    transcript: list[TranscriptSegment] = Field(default_factory=list, max_length=2000)
 
 
 class Context(BaseModel):
