@@ -236,17 +236,29 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
     # Phase one: gather evidence for every claim, then pool it. Claims are not
     # decided yet, because a claim judged before its neighbours have searched
     # can contradict one judged after them.
-    prepared_results = await asyncio.gather(
-        *(_prepare(item, segments, semaphore) for item in extracted),
-        return_exceptions=True,
-    )
-
     prepared: list[Prepared] = []
-    for result in prepared_results:
-        if isinstance(result, BaseException) or result is None:
+    total = len(extracted)
+    await send({"type": "progress", "stage": "evidence", "done": 0, "total": total})
+
+    # Reported one by one rather than awaited in a block: gathering evidence for
+    # a long video takes minutes, and a status line that never moves for that
+    # long is indistinguishable from a hang.
+    gathering = [asyncio.create_task(_prepare(item, segments, semaphore)) for item in extracted]
+    for future in asyncio.as_completed(gathering):
+        try:
+            result = await future
+        except Exception:
+            result = None
+        if result is None:
             dropped += 1
-            continue
-        prepared.append(result)
+        else:
+            prepared.append(result)
+        await send({
+            "type": "progress",
+            "stage": "evidence",
+            "done": len(prepared) + dropped,
+            "total": total,
+        })
 
     pool = []
     pooled_urls: set[str] = set()
@@ -262,6 +274,8 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
     # Phase two: decide each claim against its own evidence plus whatever the
     # pool adds, streaming results as they land.
     tasks = [asyncio.create_task(_decide(item, pool, semaphore)) for item in prepared]
+    decided = 0
+    await send({"type": "progress", "stage": "verdicts", "done": 0, "total": len(prepared)})
 
     for future in asyncio.as_completed(tasks):
         try:
@@ -270,7 +284,14 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
             dropped += 1
             continue
         claims.append(claim)
+        decided += 1
         await send({"type": "claim", "claim": claim.model_dump(mode="json")})
+        await send({
+            "type": "progress",
+            "stage": "verdicts",
+            "done": decided,
+            "total": len(prepared),
+        })
 
     if dropped:
         warnings.append(

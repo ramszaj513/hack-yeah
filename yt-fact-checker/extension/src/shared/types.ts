@@ -95,8 +95,15 @@ export interface AnalysisResponse {
 }
 
 /** Server-sent events emitted by /api/v1/check/stream. */
+export interface Progress {
+  stage: "evidence" | "verdicts";
+  done: number;
+  total: number;
+}
+
 export type StreamEvent =
   | { type: "status"; status: AnalysisStatus }
+  | ({ type: "progress" } & Progress)
   | { type: "claim"; claim: Claim }
   | { type: "complete"; response: AnalysisResponse }
   | { type: "error"; message: string };
@@ -109,6 +116,7 @@ export interface SessionState {
   mode?: "demo" | "live";
   selectedClaimId?: string;
   error?: string;
+  progress?: Progress;
 }
 
 export type RuntimeMessage =

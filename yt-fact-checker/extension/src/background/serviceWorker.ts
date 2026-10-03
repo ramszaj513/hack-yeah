@@ -84,7 +84,12 @@ async function applyEvent(
   if (!(await stillCurrent(video.id))) return;
 
   if (event.type === "status") {
-    await setState({ status: event.status });
+    await setState({ status: event.status, progress: undefined });
+    return;
+  }
+
+  if (event.type === "progress") {
+    await setState({ progress: { stage: event.stage, done: event.done, total: event.total } });
     return;
   }
 
@@ -106,6 +111,7 @@ async function applyEvent(
       warnings: response.warnings,
       mode: response.mode,
       error: undefined,
+      progress: undefined,
     });
     await sendMarkers(tabId, response.claims);
     return;

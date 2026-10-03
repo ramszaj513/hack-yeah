@@ -160,6 +160,23 @@ function render(): void {
     unsupported: "Open a YouTube video to use the checker.",
   };
   status.textContent = statusText[state.status];
+
+  // Gathering evidence for a long video runs for minutes. Without a count the
+  // panel looks frozen, which is how a working check gets mistaken for a hang.
+  const progress = state.progress;
+  if (progress && progress.total > 0 && state.status !== "complete") {
+    const label = progress.stage === "evidence" ? "sources gathered" : "claims assessed";
+    status.append(textElement("span", `${progress.done} of ${progress.total} ${label}`, "progress"));
+
+    const track = document.createElement("div");
+    track.className = "progress-track";
+    const fill = document.createElement("div");
+    fill.className = "progress-fill";
+    fill.style.width = `${Math.round((progress.done / progress.total) * 100)}%`;
+    track.append(fill);
+    status.append(track);
+  }
+
   shell.append(status);
 
   if (state.mode === "demo") {

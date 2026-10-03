@@ -108,3 +108,9 @@ h1 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.01em; }
 .legend .false { color: var(--false); }
 .legend .potentially_false { color: var(--potentially_false); }
 .legend .misleading { color: var(--misleading); }
+
+/* Evidence gathering runs for minutes on a long video; a count and a bar are
+   the difference between "working" and "hung". */
+.progress { display: block; margin-top: 8px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.progress-track { height: 2px; margin-top: 8px; border-radius: 1px; background: var(--line); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--link); transition: width .3s ease; }
