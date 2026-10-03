@@ -1,0 +1,89 @@
+{
+  "analysisId": "demo-analysis",
+  "status": "complete",
+  "claims": [
+    {
+      "id": "demo-false-1",
+      "text": "The United States Constitution was signed in 1791.",
+      "startSeconds": 14.0,
+      "endSeconds": 18.2,
+      "verdict": "false",
+      "basis": "The Constitution was signed on September 17, 1787, not 1791.",
+      "evidence": [
+        {
+          "title": "Constitution of the United States: A Transcription",
+          "publisher": "U.S. National Archives",
+          "url": "https://www.archives.gov/founding-docs/constitution-transcript",
+          "sourceType": "primary"
+        }
+      ],
+      "context": {
+        "country": "United States",
+        "timeframe": "1787"
+      }
+    },
+    {
+      "id": "demo-potentially-false-1",
+      "text": "The First Amendment protects freedom of speech from government restriction.",
+      "startSeconds": 39.0,
+      "endSeconds": 44.6,
+      "verdict": "potentially_false",
+      "basis": "The protection is against government action; the statement is incomplete without that limitation and may be false if interpreted as a universal restriction on private actors.",
+      "evidence": [
+        {
+          "title": "The Constitution of the United States: First Amendment",
+          "publisher": "U.S. Congress",
+          "url": "https://constitution.congress.gov/constitution/amendment-1/",
+          "sourceType": "primary"
+        }
+      ],
+      "context": {
+        "country": "United States",
+        "timeframe": "current constitutional text"
+      }
+    },
+    {
+      "id": "demo-supported-1",
+      "text": "The Constitution was signed on September 17, 1787.",
+      "startSeconds": 67.0,
+      "endSeconds": 72.1,
+      "verdict": "supported",
+      "basis": "The National Archives identifies September 17, 1787 as the signing date.",
+      "evidence": [
+        {
+          "title": "Constitution of the United States: A Transcription",
+          "publisher": "U.S. National Archives",
+          "url": "https://www.archives.gov/founding-docs/constitution-transcript",
+          "sourceType": "primary"
+        }
+      ],
+      "context": {
+        "country": "United States",
+        "timeframe": "1787"
+      }
+    },
+    {
+      "id": "demo-misleading-1",
+      "text": "The First Amendment means everyone can say anything anywhere without consequences.",
+      "startSeconds": 92.0,
+      "endSeconds": 99.0,
+      "verdict": "misleading",
+      "basis": "The amendment limits Congress and government action; it does not create an unrestricted right to say anything in every private or public setting.",
+      "evidence": [
+        {
+          "title": "The Constitution of the United States: First Amendment",
+          "publisher": "U.S. Congress",
+          "url": "https://constitution.congress.gov/constitution/amendment-1/",
+          "sourceType": "primary"
+        }
+      ],
+      "context": {
+        "country": "United States",
+        "timeframe": "current constitutional text"
+      }
+    }
+  ],
+  "warnings": [
+    "Demo mode: these results are prepared fixture data, not a live analysis of the current video."
+  ]
+}

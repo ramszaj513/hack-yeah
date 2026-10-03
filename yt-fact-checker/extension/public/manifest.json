@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "yt-fact-checker",
+  "version": "0.1.0",
+  "description": "Inspect factual claims in YouTube videos with evidence links.",
+  "permissions": ["sidePanel", "storage", "tabs"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Check this YouTube video"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/watch*", "https://youtube.com/watch*"],
+      "js": ["content.js"]
+    }
+  ],
+  "minimum_chrome_version": "116"
+}
