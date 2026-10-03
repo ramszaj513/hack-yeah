@@ -109,7 +109,7 @@ const TRANSCRIPT_TIMEOUT_MS = 10000;
 function startCheck(): void {
   const videoId = getVideoId();
   if (!videoId) return;
-  setButtonState("Checking…", true);
+  setButtonState("Checking", true);
 
   const video = getVideoMetadata(videoId);
   const url = window.location.href;
@@ -143,18 +143,48 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
 
 function setButtonState(label: string, disabled: boolean): void {
   if (!checkButton) return;
-  checkButton.textContent = label;
+  checkButton.replaceChildren();
+  const dot = document.createElement("span");
+  dot.className = "ytf-check-dot";
+  checkButton.append(dot, document.createTextNode(label));
   checkButton.disabled = disabled;
 }
 
+// YouTube's own action row, so the button sits beside Like and Share instead
+// of floating over the video.
+const ACTION_ROW_SELECTORS = [
+  "ytd-watch-metadata #top-level-buttons-computed",
+  "#above-the-fold #top-level-buttons-computed",
+  "#top-level-buttons-computed",
+];
+
+function findActionRow(): HTMLElement | null {
+  for (const selector of ACTION_ROW_SELECTORS) {
+    const row = document.querySelector<HTMLElement>(selector);
+    if (row) return row;
+  }
+  return null;
+}
+
 function injectCheckButton(): void {
-  if (checkButton || !document.body) return;
-  checkButton = document.createElement("button");
-  checkButton.className = "ytf-check-button";
-  checkButton.type = "button";
-  checkButton.textContent = "Check this video";
-  checkButton.addEventListener("click", () => startCheck());
-  document.body.append(checkButton);
+  if (checkButton?.isConnected) return;
+
+  const row = findActionRow();
+  // The row renders after the player, so this simply retries on the next tick
+  // rather than falling back to an overlay the viewer did not ask for.
+  if (!row) return;
+
+  const button = document.createElement("button");
+  button.className = "ytf-check-button";
+  button.type = "button";
+
+  const dot = document.createElement("span");
+  dot.className = "ytf-check-dot";
+  button.append(dot, document.createTextNode("Check facts"));
+
+  button.addEventListener("click", () => startCheck());
+  row.append(button);
+  checkButton = button;
 }
 
 function clearMarkers(): void {
@@ -335,9 +365,14 @@ chrome.runtime.onMessage.addListener((message: any) => {
 
 const style = document.createElement("style");
 style.textContent = `
-  .ytf-check-button { position: fixed; top: 76px; right: 24px; z-index: 2147483646; border: 0; border-radius: 999px; padding: 10px 16px; color: #fff; background: #635bff; font: 600 13px system-ui, sans-serif; box-shadow: 0 4px 14px #0005; cursor: pointer; }
-  .ytf-check-button:hover { background: #5148e5; }
-  .ytf-check-button:disabled { opacity: .7; cursor: wait; }
+  /* Borrows YouTube's own chip tokens so it follows the site's light and dark
+     themes instead of imposing a palette of its own. */
+  .ytf-check-button { display: inline-flex; align-items: center; gap: 7px; height: 36px; margin-left: 8px; padding: 0 16px; border: 0; border-radius: 18px; background: var(--yt-spec-badge-chip-background, #272727); color: var(--yt-spec-text-primary, #f1f1f1); font: 500 14px/1 Roboto, Arial, sans-serif; white-space: nowrap; cursor: pointer; }
+  .ytf-check-button:hover { background: var(--yt-spec-10-percent-layer, #3f3f3f); }
+  .ytf-check-button:disabled { cursor: default; opacity: .6; }
+  .ytf-check-dot { width: 7px; height: 7px; border-radius: 50%; background: #3ea6ff; flex: none; }
+  .ytf-check-button:disabled .ytf-check-dot { animation: ytf-pulse 1.4s ease-in-out infinite; }
+  @keyframes ytf-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
   .ytf-marker-host { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
   .ytf-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 7px; height: 14px; padding: 0; border: 1px solid #fff; border-radius: 3px; pointer-events: auto; cursor: pointer; box-shadow: 0 0 3px #000; }
   .ytf-marker-false { height: 20px; width: 9px; background: #ef4444; }
@@ -345,22 +380,24 @@ style.textContent = `
   .ytf-marker-misleading { height: 12px; width: 7px; background: #facc15; border-radius: 50%; border-style: dotted; }
 
   /* Sits above the control bar so it never covers the scrubber or captions. */
-  .ytf-popup { position: absolute; left: 16px; bottom: 72px; z-index: 60; width: min(380px, 42%); padding: 12px 14px; border-radius: 10px; border: 1px solid #ffffff22; background: #10121aee; color: #e9eaf0; font: 400 13px/1.45 system-ui, sans-serif; box-shadow: 0 8px 28px #000a; backdrop-filter: blur(6px); animation: ytf-pop .18s ease-out; }
-  @keyframes ytf-pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  .ytf-popup-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-  .ytf-popup-badge { border-radius: 999px; padding: 3px 8px; color: #11131a; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-  .ytf-popup-false { background: #f87171; }
-  .ytf-popup-potentially_false { background: #fbbf24; }
-  .ytf-popup-misleading { background: #fde047; }
-  .ytf-popup-close { border: 0; background: transparent; color: #9aa0b0; font-size: 13px; line-height: 1; cursor: pointer; padding: 2px 4px; }
-  .ytf-popup-close:hover { color: #e9eaf0; }
-  .ytf-popup-claim { margin: 0 0 6px; font-weight: 600; }
-  .ytf-popup-basis { margin: 0 0 10px; color: #b4b7c4; font-size: 12px; }
-  .ytf-popup-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .ytf-popup-link { overflow: hidden; color: #a5b4fc; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-  .ytf-popup-more { border: 1px solid #ffffff22; border-radius: 6px; padding: 4px 8px; background: transparent; color: #c3c7d2; font-size: 11px; cursor: pointer; white-space: nowrap; }
-  .ytf-popup-more:hover { background: #ffffff14; }
-  .ytp-fullscreen .ytf-popup { bottom: 96px; width: min(460px, 34%); }
+  .ytf-popup { position: absolute; left: 16px; bottom: 72px; z-index: 60; width: min(360px, 40%); padding: 14px; border-radius: 12px; background: #0f0f0fF2; color: #f1f1f1; font: 400 13px/1.5 Roboto, Arial, sans-serif; box-shadow: 0 6px 24px #0009; animation: ytf-pop .16s ease-out; }
+  @keyframes ytf-pop { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .ytf-popup-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+  .ytf-popup-badge { display: inline-flex; align-items: center; gap: 6px; color: #f1f1f1; font-size: 12px; font-weight: 500; }
+  .ytf-popup-badge::before { width: 8px; height: 8px; border-radius: 2px; content: ""; background: currentColor; }
+  .ytf-popup-false { color: #f05d5d; }
+  .ytf-popup-potentially_false { color: #e5a33d; }
+  .ytf-popup-misleading { color: #d9c04a; }
+  .ytf-popup-close { border: 0; background: transparent; color: #909090; font-size: 14px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+  .ytf-popup-close:hover { color: #f1f1f1; }
+  .ytf-popup-claim { margin: 0 0 7px; font-size: 14px; font-weight: 500; line-height: 1.4; }
+  .ytf-popup-basis { margin: 0 0 12px; color: #aaa; font-size: 12.5px; }
+  .ytf-popup-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .ytf-popup-link { overflow: hidden; color: #3ea6ff; font-size: 12px; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+  .ytf-popup-link:hover { text-decoration: underline; }
+  .ytf-popup-more { border: 0; border-radius: 16px; padding: 6px 12px; background: #272727; color: #f1f1f1; font: 500 12px Roboto, Arial, sans-serif; cursor: pointer; white-space: nowrap; }
+  .ytf-popup-more:hover { background: #3f3f3f; }
+  .ytp-fullscreen .ytf-popup { bottom: 96px; width: min(420px, 32%); }
 `;
 document.documentElement.append(style);
 
@@ -368,7 +405,9 @@ window.addEventListener("yt-navigate-finish", handleNavigation);
 window.addEventListener("popstate", handleNavigation);
 setInterval(() => {
   handleNavigation();
-  if (currentVideoId && !checkButton) injectCheckButton();
+  // YouTube re-renders the metadata row on its own, which detaches the button
+  // without clearing the reference, so connectedness is what to test.
+  if (currentVideoId && !checkButton?.isConnected) injectCheckButton();
   // The player element is replaced on navigation, so re-attach if needed.
   if (flaggedClaims.length > 0) attachPlaybackWatcher();
 }, 1000);

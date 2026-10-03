@@ -1,66 +1,110 @@
+/* Follows YouTube's own visual language — Roboto, its greys, its one blue —
+   so the panel reads as part of the page rather than a widget bolted onto it.
+   Verdict colour appears once per claim, on a thin rule, instead of on every
+   element at once. */
+
 :root {
   color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  background: #11131a;
-  color: #f4f5f7;
+
+  --bg: #0f0f0f;
+  --surface: #181818;
+  --line: #2a2a2a;
+  --line-soft: #202020;
+
+  --text: #f1f1f1;
+  --muted: #aaaaaa;
+  --faint: #717171;
+  --link: #3ea6ff;
+
+  --false: #f05d5d;
+  --potentially_false: #e5a33d;
+  --misleading: #d9c04a;
+  --supported: #5fbf8f;
+  --neutral: #8b8b8b;
+
+  font-family: Roboto, Arial, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
 }
 
 * { box-sizing: border-box; }
-body { min-width: 320px; margin: 0; background: #11131a; }
+body { min-width: 320px; margin: 0; background: var(--bg); }
 button, a { font: inherit; }
-.shell { padding: 20px 16px 28px; }
-.eyebrow { margin: 0 0 7px; color: #9b9eaf; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-h1 { margin: 0; font-size: 22px; letter-spacing: -.03em; }
-h2 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0; text-transform: none; color: #f4f5f7; }
-.intro { margin: 9px 0 18px; color: #a9acba; font-size: 13px; line-height: 1.5; }
-.check { width: 100%; border: 0; border-radius: 10px; padding: 12px 14px; color: white; background: #635bff; font-weight: 750; cursor: pointer; }
-.check:hover { background: #5148e5; }
-.check:disabled { cursor: wait; opacity: .65; }
-.status { margin: 16px 0; border-radius: 10px; padding: 12px; color: #c9cad4; background: #1b1e28; font-size: 13px; line-height: 1.45; }
-.status.error { color: #fecaca; background: #3a1c24; }
-.status.success { color: #bbf7d0; background: #173126; }
-.video-title { margin: 18px 0 14px; color: #d8d9e1; font-size: 13px; font-weight: 650; line-height: 1.4; }
-.warning { margin: 8px 0; color: #fcd34d; font-size: 12px; line-height: 1.4; }
-.group-title { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 8px; color: #a9acba; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
-.claim { margin: 8px 0; border: 1px solid #2b2f3c; border-left: 3px solid #586174; border-radius: 10px; padding: 12px; background: #181b24; scroll-margin-top: 12px; }
-.claim.selected { border-color: #847fff; box-shadow: 0 0 0 2px #635bff55; }
-.claim.false { border-left-color: #ef4444; }
-.claim.potentially_false { border-left-color: #f59e0b; }
-.claim.misleading { border-left-color: #facc15; }
-.claim.supported { border-left-color: #34d399; }
-.claim-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.badge { border-radius: 999px; padding: 4px 7px; color: #11131a; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.badge.false { background: #f87171; }
-.badge.potentially_false { background: #fbbf24; }
-.badge.misleading { background: #fde047; }
-.badge.supported { background: #6ee7b7; }
-.badge.context_needed, .badge.couldnt_verify { color: #e5e7eb; background: #596273; }
-.timestamp { border: 0; padding: 2px 0; color: #a5b4fc; background: transparent; cursor: pointer; font-size: 11px; }
-.claim-text { margin: 10px 0 8px; color: #f4f5f7; font-size: 14px; font-weight: 650; line-height: 1.45; }
-.basis { margin: 0 0 10px; color: #b4b7c4; font-size: 12px; line-height: 1.45; }
-.evidence { display: grid; gap: 5px; }
-.evidence a { overflow: hidden; color: #a5b4fc; font-size: 12px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.empty { margin-top: 24px; color: #a9acba; font-size: 13px; line-height: 1.5; }
-.legend { display: flex; gap: 10px; margin-top: 16px; color: #8f93a2; font-size: 10px; }
-.legend span::before { display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 2px; content: ""; background: currentColor; }
-.legend .false { color: #ef4444; }
-.legend .potentially_false { color: #f59e0b; }
-.legend .misleading { color: #facc15; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
-/* Verbatim transcript span the claim was taken from. */
-.said { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid #3b4254; color: #8b90a0; font-size: 12px; font-style: italic; line-height: 1.4; }
+.shell { padding: 20px 16px 40px; }
 
-.evidence { gap: 10px; }
-.evidence-row { display: grid; gap: 4px; }
-.evidence-meta { display: flex; flex-wrap: wrap; gap: 4px; }
-.evidence-quote { margin: 2px 0 0; color: #8b90a0; font-size: 11px; line-height: 1.4; }
+/* ---- header ---- */
 
-.tag { border-radius: 4px; padding: 2px 5px; background: #2a3040; color: #c3c7d2; font-size: 9px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-.tag-primary, .tag-academic { background: #1e3a5f; color: #93c5fd; }
-.tag-fact_checker { background: #3b2f5e; color: #c4b5fd; }
-.tag-reference { background: #30354a; color: #b9c0d4; }
-.tag-journalism, .tag-web { background: #2a3040; color: #a9afc0; }
-.tag-verified { background: #14432f; color: #6ee7b7; }
-.tag-unverified { background: #4a1d26; color: #fca5a5; }
-.tag-unknown { background: #3a3222; color: #fcd34d; }
-.tag-contradicts { background: #4a2a1d; color: #fdba74; }
+.eyebrow { margin: 0 0 4px; color: var(--faint); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+h1 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.01em; }
+.intro { margin: 10px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+.check { width: 100%; height: 40px; border: 0; border-radius: 20px; color: #0f0f0f; background: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; }
+.check:hover { background: #d9d9d9; }
+.check:disabled { color: var(--muted); background: #272727; cursor: default; }
+
+.video-title { margin: 18px 0 0; color: var(--text); font-size: 14px; font-weight: 500; line-height: 1.4; }
+
+/* ---- status ---- */
+
+.status { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.status.error { color: var(--false); }
+.status.success { color: var(--text); }
+.warning { margin: 10px 0 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--faint); font-size: 12px; line-height: 1.5; }
+
+/* ---- claim groups ---- */
+
+.group-title { display: flex; align-items: baseline; justify-content: space-between; margin: 26px 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .02em; text-transform: none; }
+.group-title span { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.claim { margin: 0 0 2px; padding: 14px 14px 14px 13px; border-left: 2px solid var(--neutral); border-radius: 0 8px 8px 0; background: var(--surface); scroll-margin-top: 12px; }
+.claim + .claim { margin-top: 8px; }
+.claim.selected { background: #202020; box-shadow: inset 0 0 0 1px var(--line); }
+.claim.false { border-left-color: var(--false); }
+.claim.potentially_false { border-left-color: var(--potentially_false); }
+.claim.misleading { border-left-color: var(--misleading); }
+.claim.supported { border-left-color: var(--supported); }
+
+.claim-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Verdict reads as a label, not a sticker. */
+.badge { color: var(--neutral); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; background: none; border-radius: 0; padding: 0; }
+.badge.false { color: var(--false); }
+.badge.potentially_false { color: var(--potentially_false); }
+.badge.misleading { color: var(--misleading); }
+.badge.supported { color: var(--supported); }
+
+.timestamp { border: 0; padding: 0; color: var(--faint); background: transparent; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.timestamp:hover { color: var(--text); }
+
+.claim-text { margin: 9px 0 0; font-size: 14px; font-weight: 400; line-height: 1.5; }
+.said { margin: 9px 0 0; padding-left: 10px; border-left: 1px solid var(--line); color: var(--faint); font-size: 12.5px; font-style: normal; line-height: 1.5; }
+.basis { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+
+/* ---- evidence ---- */
+
+.evidence { display: grid; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.evidence-row { display: grid; gap: 5px; }
+.evidence a { overflow: hidden; font-size: 12.5px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.evidence-meta { display: flex; flex-wrap: wrap; gap: 10px; }
+.evidence-quote { margin: 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
+
+/* Tags are text, not chips: eight coloured pills per claim turned the panel
+   into noise and buried the verdict. Only the two states a reader must act on
+   carry colour. */
+.tag { padding: 0; border-radius: 0; background: none; color: var(--faint); font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.tag-verified { color: var(--supported); }
+.tag-verified::before { content: "✓ "; }
+.tag-unverified { color: var(--false); }
+.tag-contradicts { color: var(--potentially_false); }
+
+.empty { margin-top: 20px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line-soft); color: var(--faint); font-size: 11px; }
+.legend span { display: inline-flex; align-items: center; }
+.legend span::before { display: inline-block; width: 8px; height: 2px; margin-right: 6px; content: ""; background: currentColor; }
+.legend .false { color: var(--false); }
+.legend .potentially_false { color: var(--potentially_false); }
+.legend .misleading { color: var(--misleading); }
