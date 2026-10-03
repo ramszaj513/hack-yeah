@@ -75,6 +75,19 @@ cd backend && .venv/bin/python -m pytest
 
 The pipeline tests cover the guarantees that hold without a model in the loop: quote anchoring, hallucinated-quote rejection, citation verification, and verdict downgrading.
 
+## Evaluation
+
+```bash
+cd backend && .venv/bin/python -m evals.run_eval              # all scripts
+cd backend && .venv/bin/python -m evals.run_eval adversarial  # one script
+```
+
+Four hand-labelled transcripts in `evals/fixtures.py`, written without punctuation to match auto-generated captions. Each segment is labelled `supported`, `refuted`, `context_needed` or `dropped` (opinions, predictions and narration that must never become claims), and the runner scores a real pipeline run against those labels.
+
+The fourth script is held out: it was written after the pipeline was tuned on the first three, and it targets the failure mode that matters most — calling a surprising-but-true claim false, or waving through a falsehood that merely sounds sensible.
+
+Recent runs score **20–21 / 21**. The score moves between runs because open-web retrieval returns different sources each time, so treat a single run as a sample rather than a fixed number. Remaining misses are compound claims needing several independently-sourced facts (e.g. comparing three historical dates); they fail as `couldnt_verify` rather than as a wrong verdict.
+
 ## Known limits
 
 - English captions only, YouTube only, no automatic scanning, no speech-to-text.

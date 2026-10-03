@@ -39,7 +39,7 @@ class Settings:
     # in exchange for higher, friendlier rate limits.
     contact_email: str
 
-    evidence_per_claim: int = 6
+    evidence_per_claim: int = 9
     http_timeout_seconds: float = 20.0
 
     extra: dict[str, str] = field(default_factory=dict)

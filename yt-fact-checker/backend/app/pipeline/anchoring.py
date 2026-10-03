@@ -104,11 +104,14 @@ def anchor_quote(quote: str, segments: list[TranscriptSegment]) -> Anchor | None
     return Anchor(startSeconds=start_seconds, endSeconds=max(end_seconds, start_seconds), score=best_score)
 
 
-def quote_appears_in(quote: str, document: str, threshold: float = 0.75) -> bool:
+def quote_appears_in(quote: str, document: str, threshold: float = 0.62) -> bool:
     """Check that a cited span really occurs in fetched source text.
 
-    Used by citation verification. Tolerant of whitespace and punctuation
-    differences, strict about the words themselves.
+    Used by citation verification. Tolerant of whitespace, punctuation and
+    light normalisation, because a page re-fetched later rarely matches
+    character-for-character what the model read — but strict enough that a
+    fabricated quote, which shares almost no vocabulary with the page it
+    claims to come from, still fails.
     """
     needle = _tokenize(quote)
     if not needle:

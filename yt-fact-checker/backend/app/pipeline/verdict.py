@@ -89,10 +89,29 @@ Rules:
 - Cite sources by their index. Every citation's `quote` must be copied verbatim
   from that source's excerpt. Do not paraphrase and do not cite a source whose
   excerpt does not actually mention the claim.
+- A comparison may be settled by combining facts from different sources, as
+  long as EACH part is stated outright in a cited excerpt and the final step is
+  simple arithmetic or ordering. If one excerpt dates a university to 1096 and
+  another dates an empire to 1325, you may conclude the university came first;
+  cite both. Requiring a single source to have phrased the whole comparison
+  would leave plainly answerable claims unanswered.
+  This permits ordering dates, comparing quantities and unit conversion only.
+  It does NOT permit inferring an unstated fact, estimating a missing number,
+  or assuming two sources are talking about the same thing when they may not
+  be. If any part is missing from the excerpts, say so and do not guess.
 - Absence of evidence is not evidence of falsity. If nothing here addresses the
   claim, return couldnt_verify with unverified_reason=no_evidence_found.
-- If sources genuinely disagree, return couldnt_verify with
-  unverified_reason=sources_conflict rather than picking a side.
+- Weigh sources by authority, in this order: primary data and official
+  statistics, then peer-reviewed research, then established fact-checkers, then
+  reference works, then journalism, then general web pages. Use
+  unverified_reason=sources_conflict only when sources of COMPARABLE authority
+  genuinely disagree. One weak page contradicting several strong ones is not a
+  conflict — follow the better evidence and say so in the basis.
+- If the claim names no country and no time period but the answer depends on
+  one — unemployment, inflation, crime, population, spending — return
+  context_needed. Do NOT quietly assume the United States, or any other
+  country, and judge the claim against it. This rule outranks the evidence:
+  an unanswerable claim stays unanswerable even when the sources are excellent.
 - If the evidence is about a different country, period or population than the
   claim, return context_needed or couldnt_verify with
   unverified_reason=evidence_not_specific.

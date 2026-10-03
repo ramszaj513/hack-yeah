@@ -49,6 +49,9 @@ Claim: {claim}
 
 Requirements:
 - Return up to 6 sources that directly address the claim.
+- If the claim compares two things ("older than", "more than", "before"), search
+  for EACH side separately and return sources for both. A source covering only
+  one half leaves the comparison unanswerable.
 - Prefer primary sources (official statistics, government and institutional
   publications, regulatory filings, court documents), then peer-reviewed
   research, then established fact-checkers and reputable news.

@@ -23,6 +23,10 @@ from app.pipeline.sources.base import http_client
 
 DEFINITIVE = {Verdict.FALSE, Verdict.POTENTIALLY_FALSE, Verdict.MISLEADING, Verdict.SUPPORTED}
 
+# Below this, we assume we failed to read the page rather than that the quote
+# is missing from it.
+MIN_READABLE_WORDS = 120
+
 _SCRIPT = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
 _TAG = re.compile(r"<[^>]+>")
 
@@ -52,6 +56,15 @@ async def _verify_one(evidence: Evidence) -> None:
         return
 
     text = html_to_text(body)
+
+    # A page we could not actually read — JS-rendered shells, consent walls,
+    # PDFs — yields almost no text. Calling that "quote not found" would be a
+    # claim about the page we are not entitled to make, and it downgrades
+    # correct verdicts, so it is recorded as unknown instead.
+    if len(text.split()) < MIN_READABLE_WORDS:
+        evidence.quoteVerified = None
+        return
+
     evidence.quoteVerified = quote_appears_in(evidence.snippet, text)
 
 
