@@ -113,6 +113,14 @@ Rules:
   rhetorical questions, personal anecdotes and value judgements. Extract them
   anyway with checkworthy=false rather than silently dropping them.
 - Do NOT invent claims that are not stated in this chunk.
+- Do not add detail the speaker did not give. If a surname is used without a
+  first name, keep it that way — supplying the wrong one makes the claim refer
+  to someone who does not exist, and it will come back unverifiable.
+- When translating, choose the meaning the speaker intended, not the literal
+  word. Polish "kapitał" in a financial context is "capital" in the sense of
+  money and investors, never a capital city; "cialo" in mathematics is a
+  field, not a body. A literal rendering that changes the meaning turns a
+  correct statement into a false one.
 - Prefer specific, consequential, verifiable assertions over trivia.
 - Return at most {limit} claims for this chunk.
 

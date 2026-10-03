@@ -101,6 +101,14 @@ Evidence:
 
 Rules:
 - Judge ONLY on the evidence above. You have no other knowledge for this task.
+- Judge the claim as written, at its own scope. "The first permit for a
+  BWRX-300" is not the claim "the first permit for any reactor", and refuting
+  the second leaves the first untouched. Do not widen or narrow a claim and
+  then disagree with the version you produced.
+- Where a phrase has more than one reading and one of them makes the claim
+  absurd, take the reading its audience would. "Polish capital is investing"
+  in a story about investors means Polish money, not the city of Warsaw. The
+  transcript was translated, so judge the meaning, not the wording.
 - Cite sources by their index. Every citation's `quote` must be copied verbatim
   from that source's excerpt. Do not paraphrase and do not cite a source whose
   excerpt does not actually mention the claim.
@@ -138,6 +146,16 @@ Rules:
 - A claim that someone SAID, ALLEGED or REPORTED something is about the
   statement, not about whether the statement is true. If the evidence shows
   the statement was made, the claim is supported.
+- Do not refute a claim about what is PLANNED or INTENDED with a document
+  about what has been APPROVED, AUTHORISED or BUILT so far. "They plan 26
+  reactors" is not contradicted by a permit covering 24: the permit is a
+  different fact. The same holds for targets, proposals and applications.
+- Never return false or potentially_false for a recent event on the strength of
+  evidence that predates it. If the claim is dated and every excerpt is older
+  than that date — a standing institutional page, a prior year's results — the
+  evidence simply has not caught up. Return couldnt_verify with
+  unverified_reason=no_evidence_found. Calling a true report of something that
+  just happened "false" is the worst error this system can make.
 - Use `misleading` when the claim is literally defensible but omits context that
   changes its meaning.
 - Use `false` only when strong evidence directly contradicts it;

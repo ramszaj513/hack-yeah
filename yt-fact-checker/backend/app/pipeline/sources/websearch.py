@@ -49,6 +49,11 @@ Claim: {claim}
 
 Requirements:
 - Return up to 6 sources that directly address the claim.
+- If the claim names a date or period, search for THAT date explicitly, and
+  prefer reporting published on or after it. An institution's own standing
+  pages often predate the event and will describe the situation before it —
+  treating those as current is how a true report of a recent event gets called
+  false. Search news for the event, not just the organisation's website.
 - If the claim compares two things ("older than", "more than", "before"), search
   for EACH side separately and return sources for both. A source covering only
   one half leaves the comparison unanswerable.
