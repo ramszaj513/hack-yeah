@@ -42,7 +42,15 @@ VERDICT_SCHEMA = {
     "properties": {
         "verdict": {"type": "string", "enum": VERDICT_VALUES},
         "confidence": {"type": "number", "description": "0 to 1."},
-        "basis": {"type": "string", "description": "Two or three sentences explaining the verdict."},
+        "basis": {
+            "type": "string",
+            "description": (
+                "At most two sentences, under 300 characters, written for a viewer "
+                "skimming a side panel. State what the evidence shows and why that "
+                "gives this verdict. Do not restate the claim, do not list the "
+                "sources, do not narrate your reasoning process."
+            ),
+        },
         "unverified_reason": {"type": "string", "enum": REASON_VALUES},
         "citations": {
             "type": "array",
@@ -71,7 +79,14 @@ REFUTATION_SCHEMA = {
     "properties": {
         "verdict_holds": {"type": "boolean"},
         "revised_verdict": {"type": "string", "enum": VERDICT_VALUES},
-        "reason": {"type": "string"},
+        "reason": {
+            "type": "string",
+            "description": (
+                "At most two sentences, under 300 characters. If the verdict is "
+                "overturned this replaces the basis shown to the viewer, so state "
+                "what the evidence supports — not what the earlier verdict got wrong."
+            ),
+        },
     },
 }
 
@@ -248,7 +263,7 @@ def _to_evidence(docs: list[RetrievedDoc], citations: list[dict]) -> list[Eviden
                     publisher=doc.publisher,
                     url=doc.url,
                     sourceType=doc.sourceType,
-                    snippet=(citation.get("quote") or "")[:2000],
+                    snippet=(citation.get("quote") or "")[:600],
                     supports=citation.get("stance") or "supports",
                 )
             )
@@ -323,14 +338,17 @@ async def adjudicate(
             note = (challenge.get("reason") or "").strip()
             verdict = revised
             confidence = min(confidence, 0.5)
-            basis = f"{basis} On review: {note}" if note else basis
+            # Replace rather than append. The challenge explains the verdict the
+            # viewer is actually being shown; keeping the overturned reasoning
+            # in front of it doubled the length and contradicted itself.
+            basis = note or basis
             if revised == Verdict.COULDNT_VERIFY and reason is None:
                 reason = UnverifiedReason.EVIDENCE_NOT_SPECIFIC
 
     return Adjudication(
         verdict=verdict,
         confidence=confidence,
-        basis=basis[:3000],
+        basis=basis[:700],
         unverified_reason=reason,
         evidence=evidence,
     )

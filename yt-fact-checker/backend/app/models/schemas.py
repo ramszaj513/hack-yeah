@@ -95,7 +95,7 @@ class Evidence(BaseModel):
     # The span the model says supports its reading of this source. When
     # citation verification runs, `quoteVerified` records whether that span was
     # actually found in the fetched page.
-    snippet: str = Field(default="", max_length=2000)
+    snippet: str = Field(default="", max_length=600)
     quoteVerified: bool | None = None
     supports: Literal["supports", "contradicts", "context"] = "supports"
 
@@ -121,7 +121,7 @@ class Claim(BaseModel):
     unverifiedReason: UnverifiedReason | None = None
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
-    basis: str = Field(min_length=1, max_length=3000)
+    basis: str = Field(min_length=1, max_length=700)
     evidence: list[Evidence] = Field(default_factory=list, max_length=12)
     context: Context = Field(default_factory=Context)
 

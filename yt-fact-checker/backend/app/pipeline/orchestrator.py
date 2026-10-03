@@ -34,7 +34,7 @@ from app.pipeline.verification import verify_citations
 
 Emit = Callable[[dict], Awaitable[None]]
 
-MAX_CONCURRENT_CLAIMS = 4
+MAX_CONCURRENT_CLAIMS = 6
 
 
 async def _noop(_: dict) -> None:

@@ -91,8 +91,8 @@ async def verify_citations(claim: Claim) -> Claim:
         claim.unverifiedReason = UnverifiedReason.CITATION_UNVERIFIABLE
         claim.confidence = min(claim.confidence, 0.3)
         claim.basis = (
-            "The cited sources were retrieved, but none of them contained the quoted passage "
-            "this verdict relied on, so no definitive verdict is reported. " + claim.basis
-        )[:3000]
+            "The cited pages were retrieved but did not contain the passages this verdict "
+            "relied on, so no definitive verdict is reported."
+        )
 
     return claim

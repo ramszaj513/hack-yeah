@@ -59,7 +59,7 @@ def settings() -> Settings:
         openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini").strip(),
         openai_reasoning_model=os.getenv("OPENAI_REASONING_MODEL", "gpt-5.4").strip(),
         google_fact_check_api_key=os.getenv("GOOGLE_FACT_CHECK_API_KEY", "").strip(),
-        max_claims=_int("MAX_CLAIMS", 8),
+        max_claims=_int("MAX_CLAIMS", 16),
         max_transcript_segments=_int("MAX_TRANSCRIPT_SEGMENTS", 2000),
         enable_web_search=_flag("ENABLE_WEB_SEARCH", "true"),
         enable_citation_verification=_flag("ENABLE_CITATION_VERIFICATION", "true"),
