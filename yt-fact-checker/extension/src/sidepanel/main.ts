@@ -74,13 +74,34 @@ function el(tag: string, text: string, className?: string): HTMLElement {
   return node;
 }
 
-function iconButton(label: string, title: string, onClick: () => void): HTMLButtonElement {
+const ICONS = {
+  // Drawn rather than typed: an emoji glyph carries its own colour and ignores
+  // the stylesheet, so it never matched anything else in the panel.
+  settings: "M4 7h10M4 12h7M4 17h12M16 5v4M13 10v4M18 15v4",
+  close: "M6 6l12 12M18 6L6 18",
+};
+
+function iconButton(path: string, title: string, onClick: () => void): HTMLButtonElement {
   const button = document.createElement("button");
   button.className = "icon";
   button.type = "button";
-  button.textContent = label;
   button.title = title;
   button.setAttribute("aria-label", title);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.6");
+  svg.setAttribute("stroke-linecap", "round");
+
+  const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  shape.setAttribute("d", path);
+  svg.append(shape);
+
+  button.append(svg);
   button.addEventListener("click", onClick);
   return button;
 }
@@ -238,11 +259,11 @@ function render(): void {
   const tools = document.createElement("div");
   tools.className = "tools";
   tools.append(
-    iconButton("⚙", "Settings", () => {
+    iconButton(ICONS.settings, "Settings", () => {
       settingsOpen = !settingsOpen;
       render();
     }),
-    iconButton("✕", "Close", () => window.close()),
+    iconButton(ICONS.close, "Close", () => window.close()),
   );
   header.append(tools);
   shell.append(header);

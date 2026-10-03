@@ -80,7 +80,9 @@ async function openSidePanel(tabId?: number): Promise<void> {
       await chrome.tabs.update(existing[0].id, { active: true });
       return;
     }
-    await chrome.tabs.create({ url, active: false });
+    // Opened in the foreground: a background tab is indistinguishable from the
+    // button having done nothing, which is how this looked on Brave.
+    await chrome.tabs.create({ url, active: true });
   } catch (error) {
     console.warn("[yt-fact-checker] could not open the results view:", error);
   }
@@ -237,6 +239,10 @@ chrome.runtime.onInstalled.addListener(() => {
   if (typeof chrome.sidePanel?.setPanelBehavior === "function") {
     void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
   }
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  void openSidePanel(tab.id);
 });
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {

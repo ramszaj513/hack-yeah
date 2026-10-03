@@ -296,7 +296,7 @@ function showPopup(mark: Mark): void {
   const close = document.createElement("button");
   close.className = "ytf-popup-close";
   close.type = "button";
-  close.textContent = "✕";
+  close.textContent = "\u00d7";
   close.title = "Dismiss";
   close.addEventListener("click", (event) => {
     event.stopPropagation();
