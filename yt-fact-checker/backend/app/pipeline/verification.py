@@ -81,7 +81,12 @@ async def verify_citations(claim: Claim) -> Claim:
     # Sort verified citations first so the panel leads with what held up.
     claim.evidence.sort(key=lambda item: (item.quoteVerified is not True, item.tier))
 
-    if claim.verdict in DEFINITIVE and checked and not verified:
+    # One mismatch is not enough to throw out a verdict. Re-fetching a page
+    # later routinely returns something different from what the model read —
+    # an edited article, a redirect, a localised variant — and letting a single
+    # such miss veto an otherwise sound verdict discards correct answers. Two
+    # independent misses with nothing verified is a real signal.
+    if claim.verdict in DEFINITIVE and len(checked) >= 2 and not verified:
         claim.verdict = Verdict.COULDNT_VERIFY
         claim.unverifiedReason = UnverifiedReason.CITATION_UNVERIFIABLE
         claim.confidence = min(claim.confidence, 0.3)

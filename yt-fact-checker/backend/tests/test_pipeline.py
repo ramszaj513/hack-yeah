@@ -98,10 +98,11 @@ async def test_unverifiable_citations_downgrade_a_definitive_verdict(monkeypatch
             Evidence(
                 title="Source",
                 publisher="Example",
-                url="https://example.com/a",
+                url=f"https://example.com/{index}",
                 sourceType="journalism",
                 snippet="a sentence that is not actually on the page",
             )
+            for index in range(2)
         ],
     )
 
@@ -113,6 +114,36 @@ async def test_unverifiable_citations_downgrade_a_definitive_verdict(monkeypatch
 
     assert result.verdict == Verdict.COULDNT_VERIFY
     assert result.unverifiedReason == UnverifiedReason.CITATION_UNVERIFIABLE
+
+
+@pytest.mark.asyncio
+async def test_a_single_mismatch_does_not_veto_a_verdict(monkeypatch) -> None:
+    # Re-fetching a page often returns something other than what the model
+    # read, so one miss must not discard an otherwise sound verdict.
+    claim = Claim(
+        text="A definitive sounding claim.",
+        startSeconds=0,
+        endSeconds=1,
+        verdict=Verdict.SUPPORTED,
+        basis="Sources say so.",
+        evidence=[
+            Evidence(
+                title="Source",
+                publisher="Example",
+                url="https://example.com/a",
+                sourceType="journalism",
+                snippet="a quoted sentence",
+            )
+        ],
+    )
+
+    async def fake_verify(evidence):
+        evidence.quoteVerified = False
+
+    monkeypatch.setattr("app.pipeline.verification._verify_one", fake_verify)
+    result = await verify_citations(claim)
+
+    assert result.verdict == Verdict.SUPPORTED
 
 
 @pytest.mark.asyncio

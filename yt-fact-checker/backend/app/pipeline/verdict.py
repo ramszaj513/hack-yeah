@@ -112,9 +112,17 @@ Rules:
   context_needed. Do NOT quietly assume the United States, or any other
   country, and judge the claim against it. This rule outranks the evidence:
   an unanswerable claim stays unanswerable even when the sources are excellent.
-- If the evidence is about a different country, period or population than the
-  claim, return context_needed or couldnt_verify with
-  unverified_reason=evidence_not_specific.
+- If the evidence is about a genuinely different country, period or population
+  than the claim, return context_needed or couldnt_verify with
+  unverified_reason=evidence_not_specific. "Genuinely different" means a
+  reader would draw a different conclusion — not that the claim rounded a
+  number, used a synonym, or named a slightly wider group than the source.
+  A source reporting 1,949 arrests supports a claim of "1,948 detained"; a
+  source reporting 305 injured police supports "305 police and gendarmes
+  injured". Match the substance, not the wording.
+- A claim that someone SAID, ALLEGED or REPORTED something is about the
+  statement, not about whether the statement is true. If the evidence shows
+  the statement was made, the claim is supported.
 - Use `misleading` when the claim is literally defensible but omits context that
   changes its meaning.
 - Use `false` only when strong evidence directly contradicts it;
@@ -147,12 +155,47 @@ Do NOT overturn a verdict because:
   as long as its substance is right;
 - the claim omits precision that does not change whether it is true;
 - the evidence states the fact in different words than the claim does;
-- you personally would have phrased the basis differently.
+- you personally would have phrased the basis differently;
+- a number differs trivially from the source (1,948 against 1,949, "over 400"
+  against 400). Speakers round and sources revise. Overturn only when the
+  difference changes what a reader would conclude;
+- the claim and the source use different words for the same thing ("detained"
+  against "arrested", "police" against "police and gendarmes"). Overturn only
+  if the substitution actually changes the meaning;
+- the claim reports that someone SAID or ALLEGED something. If the evidence
+  shows they said it, the claim is supported — whether the allegation itself
+  is true is a different claim that was not made here;
+- the claim is slightly broader or narrower than the evidence while remaining
+  substantially accurate.
+
+context_needed means the claim CANNOT be assessed as stated — a missing
+country, a missing period, an ambiguous term. It is not a resting place for a
+claim you did assess and found a little imprecise. If the substance checks out,
+keep the verdict.
+
+Keep `reason` to one or two sentences. It is shown to a viewer underneath the
+basis, not written for another model.
 
 A plainly correct claim backed by clear evidence must keep its verdict. Hedging
 a well-evidenced verdict into couldnt_verify is itself a failure: it tells the
 viewer nothing and hides a real answer behind false caution.
 """
+
+
+# A verdict is challenged when it is the kind that goes wrong: thin sourcing,
+# weak sourcing, or the model's own hesitancy. Re-litigating a confident
+# verdict backed by several good sources does not catch errors — it just
+# invites the challenger to manufacture a doubt, which is how plain facts end
+# up hedged into uselessness.
+STRONG_TIER = 3
+CONFIDENT = 0.85
+
+
+def _worth_challenging(confidence: float, evidence: list[Evidence]) -> bool:
+    strong = [item for item in evidence if item.tier <= STRONG_TIER]
+    if len(strong) >= 2 and confidence >= CONFIDENT:
+        return False
+    return True
 
 
 @dataclass
@@ -255,7 +298,7 @@ async def adjudicate(
     evidence = _to_evidence(docs, payload.get("citations") or [])
 
     definitive = verdict in {Verdict.FALSE, Verdict.POTENTIALLY_FALSE, Verdict.MISLEADING, Verdict.SUPPORTED}
-    if refute and definitive:
+    if refute and definitive and _worth_challenging(confidence, evidence):
         try:
             challenge, _ = await structured_call(
                 prompt=REFUTATION_PROMPT.format(

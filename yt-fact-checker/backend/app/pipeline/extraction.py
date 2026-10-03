@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import date
 import re
 
 from app.config import settings
@@ -86,10 +87,18 @@ Rules:
 - Write `claim` as a statement ABOUT THE WORLD that stands entirely on its own.
   A researcher who has never seen this video must be able to check it using
   public sources alone.
-- Resolve pronouns ("they", "it"), vague references ("the government", "this
-  country") and relative times ("last year") using the video title and
-  surrounding transcript. If the transcript is not in English, write the claim
-  in English.
+- Resolve pronouns ("they", "it") and vague references ("the government",
+  "this country") using the video title and surrounding transcript. If the
+  transcript is not in English, write the claim in English.
+- Today's date is {today}. Resolve relative times — "on Thursday", "four days
+  ago", "last month", "recently" — against TODAY, not against any year you
+  associate with the subject matter. A video discussing current events is
+  almost always discussing them now.
+- Never invent a year. If the transcript does not establish when something
+  happened and today's date does not settle it, leave `timeframe` empty and
+  write the claim without a year. A wrong year is worse than no year: it makes
+  correct evidence look like it is about a different event, and the claim gets
+  reported as unverifiable.
 - The claim must NOT refer to the video, the transcript, the speaker, or the
   order things were said in. Those are facts about a recording, not about the
   world, and nothing can verify them.
@@ -160,7 +169,12 @@ def render_chunk(chunk: list[TranscriptSegment]) -> str:
 
 
 async def _extract_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, limit: int) -> list[ExtractedClaim]:
-    prompt = PROMPT.format(limit=limit, title=video.title or "(unknown)", chunk=render_chunk(chunk))
+    prompt = PROMPT.format(
+        limit=limit,
+        title=video.title or "(unknown)",
+        today=date.today().isoformat(),
+        chunk=render_chunk(chunk),
+    )
     payload, _ = await structured_call(
         prompt=prompt,
         schema_name="claim_extraction",
