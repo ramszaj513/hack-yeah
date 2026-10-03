@@ -1,17 +1,17 @@
-# Zasugeruj i przejmij zamiast ciągłego re-planu i nieprzypiętych propozycji
+# Suggest and claim instead of continuous re-planning and unpinned proposals
 
-Solver produkuje **sugerowane objazdy**, które kierowca jawnie **przejmuje** (Claim). Skrzynki i slot znikają z puli dopiero po przejęciu. Odrzucamy zarówno stary model „nieprzypiętych propozycji z natychmiastowym re-solve przy każdym zdarzeniu” (stary ADR 0003), jak i pełne przypinanie z góry. Ciągły re-plan powodował wyścigi, „martwe” powiadomienia i burze solvera; pełne przypinanie blokowało zasoby przez wolno reagujących. Model „zasugeruj → przejmij” jest prostszy, przewidywalny i odpowiada realnym przejazdom, gdzie decyzję podejmuje kierowca.
+The solver produces **suggested detours** that the driver explicitly **claims**. Crates and the slot leave the pool only after the claim. We reject both the old model of "unpinned proposals with an immediate re-solve on every event" (old ADR 0003) and full up-front assignment. Continuous re-planning caused races, "dead" notifications, and solver storms; full assignment blocked resources for slow responders. The "suggest → claim" model is simpler, predictable, and matches real trips, where the driver makes the decision.
 
 ## Consequences
 
-- Znika potrzeba retrakcji powiadomień i debounce — sugerowany objazd po prostu wygasa bez przejęcia.
-- Między wygenerowaniem a przejęciem dwaj kierowcy mogą zobaczyć tę samą propozycję; rozwiązujemy to atomowym przejęciem po stronie serwera (pierwszy wygrywa).
-- Brak ciągłego optymalnego planu „na teraz” — świadomie stawiamy prostotę i zrozumiałość nad globalną optymalność.
-- Można później dodać limit czasu ważności sugestii, ale nie jest wymagany do MVP.
+- There is no need for notification retraction or debounce — a suggested detour simply expires without a claim.
+- Between generation and claim, two drivers may see the same proposal; we solve this with an atomic server-side claim (first one wins).
+- There is no continuous optimal "right now" plan — we deliberately put simplicity and clarity above global optimality.
+- A suggestion validity timeout could be added later, but it is not required for the MVP.
 
-## Uzupełnienie
+## Addendum
 
-ADR 0005 precyzuje realizację: sugestie są efemeryczne i przeliczane przy każdym `GET /state`
-(czyli po każdym zdarzeniu). To nie jest „ciągły re-plan” w duchu odrzuconym powyżej — nie ma
-trwałych propozycji, powiadomień ani retrakcji; solver zwraca po prostu świeży, rozłączny
-zestaw sugestii nad bieżącą pulą.
+ADR 0005 makes the realization precise: suggestions are ephemeral and recomputed on every
+`GET /state` (that is, after every event). This is not "continuous re-planning" in the sense
+rejected above — there are no persistent proposals, notifications, or retractions; the solver
+simply returns a fresh, disjoint set of suggestions over the current pool.

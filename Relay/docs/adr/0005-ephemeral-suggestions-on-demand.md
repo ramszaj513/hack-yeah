@@ -1,19 +1,11 @@
-# Sugestie efemeryczne przeliczane on-demand zamiast trwałych propozycji
+# Ephemeral suggestions recomputed on demand instead of persistent proposals
 
-Solver nie zapisuje propozycji w bazie: przy każdym `GET /state` (czyli po każdym zdarzeniu)
-przelicza na bieżąco rozłączny zestaw **sugerowanych objazdów** z Residual Pool. Przejęty
-objazd (Claim) jest trwały, ale sama sugestia istnieje tylko jako wynik obliczenia.
-Rozważaliśmy zapisywanie propozycji w tabeli `proposals` oraz klasyczny model z przypinaniem
-i re-solve przy każdym zdarzeniu (ADR 0003/0004). Odrzuciliśmy trwałe propozycje, bo wymagają
-retrakcji, powiadomień i rozwiązywania konfliktów między nieaktualnymi wierszami. Efemeryczne
-sugestie są zawsze spójne z pulą, a ich koszt przeliczenia jest znikomy przy skali demo.
+The solver does not store proposals in the database: on every `GET /state` (that is, after every event) it recomputes, on the fly, a disjoint set of **suggested detours** from the Residual Pool. A claimed detour (Claim) is persistent, but the suggestion itself exists only as a computation result. We considered storing proposals in a `proposals` table and the classic model with assignment and re-solve on every event (ADR 0003/0004). We rejected persistent proposals because they require retraction, notifications, and conflict resolution between stale rows. Ephemeral suggestions are always consistent with the pool, and their recomputation cost is negligible at demo scale.
 
 ## Consequences
 
-- „Auto-run po zdarzeniu” realizuje `GET /state`; nie ma osobnego endpointu `/optimize`.
-- Sugestia nie ma trwałego identyfikatora — `POST /claim` przekazuje jej zawartość
-  (`trip_id`, `need_id`, `crate_ids`) i waliduje ją na bieżąco; nieaktualna → `409`.
-- Sugestie są wzajemnie rozłączne w obrębie jednego przeliczenia, więc przejęcie dowolnego
-  podzbioru nie powoduje konfliktów.
-- Brak powiadomień push i retrakcji — kierowca widzi aktualny stan przy odświeżeniu.
-- Przy większej skali trzeba by dodać cache/inkrementalność; poza zakresem MVP.
+- "Auto-run after an event" is implemented by `GET /state`; there is no separate `/optimize` endpoint.
+- A suggestion has no persistent identifier — `POST /claim` sends its contents (`trip_id`, `need_id`, `crate_ids`) and validates them on the fly; stale → `409`.
+- Suggestions are mutually disjoint within one computation, so claiming any subset causes no conflicts.
+- No push notifications and no retractions — the driver sees the current state on refresh.
+- At larger scale one would need caching/incrementality; out of MVP scope.

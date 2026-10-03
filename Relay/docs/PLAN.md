@@ -1,37 +1,38 @@
-# Relay — plan implementacji (2 h, 1 agent kodowania)
+# Relay — implementation plan (2 h, 1 coding agent)
 
-Master-plan projektu. Dokumentacja referencyjna: `ARCHITECTURE.md`, `ALGORITHM.md`,
+Master project plan. Reference docs: `ARCHITECTURE.md`, `ALGORITHM.md`,
 `IMPLEMENTATION.md`, `GLOSSARY.md`, `adr/`.
 
-## 0. Zablokowane decyzje
+## 0. Locked decisions
 
-| Obszar | Decyzja |
+| Area | Decision |
 |---|---|
-| Stack | Python + FastAPI + SQLite; frontend `index.html` + Leaflet z CDN, bez build-stepu |
-| Czas | Tylko geometria; okno odjazdu pomijamy |
-| Objązdy | 1 przejazd = dokładnie 1 objazd |
+| Stack | Python + FastAPI + SQLite; frontend `index.html` + Leaflet from CDN, no build step |
+| Time | Geometry only; departure windows are skipped |
+| Detours | 1 trip = exactly 1 detour |
 | Fairness | `U = Σₙ severityₙ · Σ_c log(1 + deliveredₙ,c)` |
-| Dostawy | Częściowe, min. 1 skrzynka |
-| Wyzwalanie | Po każdym zdarzeniu; `GET /state` przelicza sugestie |
-| Skala | Obszar ~30×30 km, prędkość 50 km/h (0,8333 km/min) |
-| Widoki | Tylko mapa admina |
-| Porównanie | Globalny przełącznik `fair_share` / `nearest_fit` |
-| Testy | Jeden smoke test E2E |
-| QR | Pominięte; skrzynka ma tekstowy `id` |
+| Deliveries | Partial, min. 1 crate |
+| Trigger | After every event; `GET /state` recomputes suggestions |
+| Scale | Area ~30×30 km, speed 50 km/h (0.8333 km/min) |
+| Views | Admin map only |
+| Comparison | Global switch `fair_share` / `nearest_fit` |
+| Tests | One end-to-end smoke test |
+| QR | Skipped; a crate has a text `id` |
 
-Sugestie są **efemeryczne** — nie zapisujemy ich w bazie, przeliczamy je w `GET /state`
-(zob. ADR 0005). „Auto-run po zdarzeniu” = front odświeża `/state` po każdym POST/claim.
+Suggestions are **ephemeral** — we do not store them in the database; we recompute them in
+`GET /state` (see ADR 0005). "Auto-run after an event" = the frontend refreshes `/state`
+after every POST/claim.
 
-## 1. Architektura
+## 1. Architecture
 
 ```
 Relay/
 ├─ app/
 │  ├─ config.py     # R, LAT0, SPEED_KMH, DB_PATH, MODES
-│  ├─ db.py         # schemat SQLite, seed, zapytania, transakcje, Lock
+│  ├─ db.py         # SQLite schema, seed, queries, transactions, Lock
 │  ├─ geometry.py   # xy(), dist(), seg_dist(), polyline_dist()
-│  ├─ solver.py     # faza 1 (kandydaci), faza 2 (greedy), metryki
-│  └─ main.py       # FastAPI, walidacja, endpointy
+│  ├─ solver.py     # phase 1 (candidates), phase 2 (greedy), metrics
+│  └─ main.py       # FastAPI, validation, endpoints
 ├─ web/
 │  ├─ index.html
 │  ├─ app.js
@@ -42,12 +43,13 @@ Relay/
 └─ run.sh
 ```
 
-Przepływ: `POST` → walidacja → SQLite → front woła `GET /state` → serwer liczy kandydatów
-i greedy → zwraca rozłączne sugestie → `POST /claim` (transakcja) → refetch.
+Flow: `POST` → validation → SQLite → the frontend calls `GET /state` → the server computes
+candidates and the greedy pass → returns disjoint suggestions → `POST /claim` (transaction)
+→ refetch.
 
-Jeden worker uvicorn + `threading.Lock` wokół mutacji i przeliczeń = brak wyścigów.
+One uvicorn worker + a `threading.Lock` around mutations and solver runs = no races.
 
-## 2. Model danych
+## 2. Data model
 
 ```sql
 CREATE TABLE crates(
@@ -72,20 +74,20 @@ CREATE TABLE requirements(
 CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT);  -- mode
 ```
 
-`remaining(need,cat) = max(0, needed − delivered)`. Punkt zamyka się, gdy wszystkie
+`remaining(need,cat) = max(0, needed − delivered)`. A point closes when all
 `remaining == 0`.
 
-## 3. Geometria i stałe
+## 3. Geometry and constants
 
 ```python
-R = 6371.0; LAT0 = 52.2297                      # Warszawa jako środek mapy
+R = 6371.0; LAT0 = 52.2297                      # Warsaw as the map center
 SPEED_KMH = 50.0; SPEED_KM_PER_MIN = SPEED_KMH/60.0
 
-def xy(lat, lon):                               # lokalny płaski układ w km
+def xy(lat, lon):                               # local flat system in km
     return (R*radians(lon)*cos(radians(LAT0)), R*radians(lat))
-def dist(a, b): ...                             # km (Euclid w xy)
-def seg_dist(p, a, b): ...                      # rzut z przycięciem (obsługa a==b)
-def polyline_dist(p, pts): min(seg_dist(...))   # odległość od trasy O→N→D
+def dist(a, b): ...                             # km (Euclid in xy)
+def seg_dist(p, a, b): ...                      # clamped projection (handles a==b)
+def polyline_dist(p, pts): min(seg_dist(...))   # distance to the O→N→D route
 ```
 
 - `allowance_km(t) = detour_budget_min × SPEED_KM_PER_MIN`
@@ -93,22 +95,22 @@ def polyline_dist(p, pts): min(seg_dist(...))   # odległość od trasy O→N→
 - `detour_km(t,N) = dist(O,N) + dist(N,D) − dist(O,D)`
 - `extra_minutes = detour_km / SPEED_KM_PER_MIN`
 
-Rzut lokalny jest przy 30 km równoważny „prostej linii” (ADR 0002).
+The local projection is equivalent to a "straight line" at 30 km (ADR 0002).
 
-## 4. Algorytm
+## 4. Algorithm
 
-### Faza 1 — generowanie kandydatów (per para przejazd × punkt)
+### Phase 1 — candidate generation (per trip × point pair)
 
-1. Policz `detour_km(t,N)`; jeśli `> allowance_km(t)` → odrzuć.
-2. Trasa objazdu = łamana `[O, N, D]`; zbierz skrzynki `available` z
+1. Compute `detour_km(t,N)`; if `> allowance_km(t)` → reject.
+2. Detour route = polyline `[O, N, D]`; collect `available` crates with
    `polyline_dist(crate, [O,N,D]) ≤ corridor_half_km(t)`.
-3. Odfiltruj kategorie, których `N` już nie potrzebuje (`remaining == 0`).
-4. `s = min(slots_free, Σ remaining(N))`; wybierz `s` skrzynek zachłannie: najpierw
-   kategoria o największym `Δ(c) = severity_N · [log(1+delivered_c+1) − log(1+delivered_c)]`,
-   potem najbliższa skrzynka tej kategorii (tie-break `id`). Mieszane kategorie dozwolone.
-5. Jeśli wybrano ≥ 1 skrzynkę → kandydat `(t, N, crate_ids, extra_minutes, utility_gain)`.
+3. Filter out categories whose `N` no longer needs them (`remaining == 0`).
+4. `s = min(slots_free, Σ remaining(N))`; select `s` crates greedily: first the
+   category with the largest `Δ(c) = severity_N · [log(1+delivered_c+1) − log(1+delivered_c)]`,
+   then the nearest crate of that category (tie-break `id`). Mixed categories allowed.
+5. If ≥ 1 crate was selected → candidate `(t, N, crate_ids, extra_minutes, utility_gain)`.
 
-### Faza 2 — zachłanny wybór (sugestie rozłączne)
+### Phase 2 — greedy selection (disjoint suggestions)
 
 ```
 used_trips, claimed_crates = ∅
@@ -117,87 +119,87 @@ while True:
     if none: break
     emit best
     used_trips += best.trip; claimed_crates += best.crates
-    zaktualizuj delivered/remaining w pamięci; zamknij N jeśli pełny
-    przebuduj kandydatów pomijając used_trips i claimed_crates
+    update delivered/remaining in memory; close N if full
+    rebuild candidates skipping used_trips and claimed_crates
 ```
 
 - `fair_share`: `score = utility_gain`, tie-break `(−extra_minutes, trip_id, need_id)`.
 - `nearest_fit`: `score = −extra_minutes`, tie-break `(utility_gain, trip_id, need_id)`.
 
-Sugestie są rozłączne → klient może przejąć dowolny podzbiór bez niespodzianek.
+Suggestions are disjoint → the client can claim any subset without surprises.
 
-### Metryki
+### Metrics
 
 - `unmet_n = Σ_c remaining(n,c)`; `capacity_n = Σ_c needed(n,c)`.
 - `Starvation Index = Σ_n severity_n·(unmet_n/capacity_n) / Σ_n severity_n × 100%`.
-- Panel: % zapełnienia per punkt + globalny index.
+- Panel: % fill per point + the global index.
 
-## 5. Katalog przypadków
+## 5. Case catalog
 
-### 5a. Wejście / walidacja
+### 5a. Input / validation
 
-| # | Przypadek | Zachowanie |
+| # | Case | Behavior |
 |---|---|---|
-| 1 | Nieznana kategoria | `422` |
-| 2 | Współrzędne poza zakresem | `422` |
-| 3 | `detour_budget_min ≤ 0` lub `slots_free ≤ 0` | `422` |
-| 4 | `severity` poza 1..5 | `422` |
-| 5 | Wszystkie `needed == 0` przy tworzeniu punktu | `closed` od razu, nigdy kandydat |
-| 6 | Duplikat `id` | `409` |
-| 7 | Brak treści / zły JSON | `422` |
+| 1 | Unknown category | `422` |
+| 2 | Coordinates out of range | `422` |
+| 3 | `detour_budget_min ≤ 0` or `slots_free ≤ 0` | `422` |
+| 4 | `severity` outside 1..5 | `422` |
+| 5 | All `needed == 0` when creating a point | `closed` immediately, never a candidate |
+| 6 | Duplicate `id` | `409` |
+| 7 | Missing body / bad JSON | `422` |
 
-### 5b. Generowanie kandydatów
+### 5b. Candidate generation
 
-| # | Przypadek | Wynik |
+| # | Case | Result |
 |---|---|---|
-| 8 | Brak skrzynek / przejazdów / otwartych punktów | brak sugestii |
-| 9 | `O == D` (trasa punktowa) | segment zdegenerowany; `seg_dist` → odległość do punktu |
-| 10 | `detour_km > allowance` | para odrzucona |
-| 11 | Brak skrzynek w korytarzu `[O,N,D]` | para odrzucona |
-| 12 | Skrzynki są, ale kategoria niepotrzebna | odrzucone |
-| 13 | `slots_free` mniejsze niż potrzeba | bierzemy `slots_free` |
-| 14 | Mniej skrzynek niż potrzeba | bierzemy wszystkie dostępne |
-| 15 | Skrzynka w korytarzu wielu przejazdów | kandydat dla każdego; greedy przypisze raz |
-| 16 | `delivered_c ≥ needed_c` | kategoria wykluczona |
-| 17 | Równe zyski marginalne | tie-break po `id` |
-| 18 | Punkt w pełni zaspokojony | `closed`, pominięty |
+| 8 | No crates / trips / open points | no suggestions |
+| 9 | `O == D` (point trip) | degenerate segment; `seg_dist` → distance to the point |
+| 10 | `detour_km > allowance` | pair rejected |
+| 11 | No crates in corridor `[O,N,D]` | pair rejected |
+| 12 | Crates exist, but the category is not needed | rejected |
+| 13 | `slots_free` less than needed | take `slots_free` |
+| 14 | Fewer crates than needed | take all available |
+| 15 | A crate in the corridor of many trips | candidate for each; greedy assigns it once |
+| 16 | `delivered_c ≥ needed_c` | category excluded |
+| 17 | Equal marginal gains | tie-break by `id` |
+| 18 | Point fully satisfied | `closed`, skipped |
 
-### 5c. Greedy / konflikty
+### 5c. Greedy / conflicts
 
-| # | Przypadek | Handling |
+| # | Case | Handling |
 |---|---|---|
-| 19 | Przejazd już użyty w sugestii | pomijany |
-| 20 | Skrzynka już przypisana | pomijana |
-| 21 | Punkt zamknięty w trakcie pętli | pomijany |
-| 22 | Kandydat unieważniony | pomijany przy przebudowie |
-| 23 | Brak nowego kandydata w przebiegu | koniec pętli |
-| 24 | Punkt obsłużony częściowo przez kilka przejazdów | dozwolone |
-| 25 | Równe `detour` w `nearest_fit` | tie-break `utility_gain`, potem `id` |
-| 26 | Wszystkie przejazdy zużyte | brak dalszych sugestii |
+| 19 | Trip already used in a suggestion | skipped |
+| 20 | Crate already assigned | skipped |
+| 21 | Point closed during the loop | skipped |
+| 22 | Candidate invalidated | skipped on rebuild |
+| 23 | No new candidate in a pass | end of loop |
+| 24 | Point served partially by several trips | allowed |
+| 25 | Equal `detour` in `nearest_fit` | tie-break `utility_gain`, then `id` |
+| 26 | All trips used | no further suggestions |
 
 ### 5d. Claim
 
-| # | Przypadek | Zachowanie |
+| # | Case | Behavior |
 |---|---|---|
-| 27 | `trip_id` już `used` | `409` |
-| 28 | Skrzynka już `claimed` | `409` |
-| 29 | Ilość skrzynek kategorii > `remaining` | `409` |
-| 30 | Punkt `closed` | `409` |
-| 31 | Poprawny claim | transakcja: crates→claimed, trip→used, delivered += n, ewentualnie need→closed |
-| 32 | Dwa szybkie claimy | `Lock` + transakcja; pierwszy wygrywa |
+| 27 | `trip_id` already `used` | `409` |
+| 28 | Crate already `claimed` | `409` |
+| 29 | Number of crates of a category > `remaining` | `409` |
+| 30 | Point `closed` | `409` |
+| 31 | Valid claim | transaction: crates→claimed, trip→used, delivered += n, maybe need→closed |
+| 32 | Two fast claims | `Lock` + transaction; the first wins |
 
-### 5e. Sterowanie
+### 5e. Control
 
-| # | Przypadek | Zachowanie |
+| # | Case | Behavior |
 |---|---|---|
-| 33 | `mode` nieznany | `400` |
-| 34 | Zmiana trybu | zapis w `settings`; `/state` przelicza |
-| 35 | `POST /reset` | `DELETE` tabel + seed; `200` |
-| 36 | Brak seeda po restarcie | `db.init()` seeduje, jeśli puste |
+| 33 | Unknown `mode` | `400` |
+| 34 | Mode change | stored in `settings`; `/state` recomputes |
+| 35 | `POST /reset` | `DELETE` tables + seed; `200` |
+| 36 | No seed after restart | `db.init()` seeds if empty |
 
 ## 6. API
 
-| Metoda | Ścieżka | Body → Response |
+| Method | Path | Body → Response |
 |---|---|---|
 | `GET` | `/state` | `{mode, crates, trips, need_points, suggestions, metrics}` |
 | `POST` | `/crates` | `{category, lat, lon}` → `{id}` |
@@ -209,47 +211,47 @@ Sugestie są rozłączne → klient może przejąć dowolny podzbiór bez niespo
 
 ## 7. Frontend
 
-- Mapa Leaflet (OSM), środek `LAT0`, zoom na ~30 km.
-- Punkty potrzeb: okrąg, kolor wg `severity`, rozmiar wg unmet.
-- Przejazdy: szare linie `O→D`.
-- Sugestie: łamana `O→skrzynki→N→D`, w panelu przycisk **Przejmij**.
-- Panel: `Starvation Index`, słupki zapełnienia, przełącznik trybu, `Reset`.
-- Po każdym POST/claim: `fetch('/state')` → przerysowanie (to realizuje auto-run).
+- Leaflet map (OSM), center `LAT0`, zoom covering ~30 km.
+- Need-points: circle, color by `severity`, size by unmet.
+- Trips: grey `O→D` lines.
+- Suggestions: polyline `O→crates→N→D`, with a **Claim** button in the panel.
+- Panel: `Starvation Index`, fill bars, mode switch, `Reset`.
+- After every POST/claim: `fetch('/state')` → redraw (this implements auto-run).
 
-## 8. Seed (scenariusz kontrastu)
+## 8. Seed (contrast scenario)
 
-- ~6 punktów potrzeb w kwadracie 30×30 km, w tym daleki o `severity=5`.
-- ~15 skrzynek w korytarzach przejazdów.
-- ~5 przejazdów przecinających centrum, budżety zróżnicowane 5–15 min.
-- Dobór tak, by `nearest_fit` obsłużył bliski punkt o niskiej pilności, a `fair_share`
-  dotarł do dalekiego `severity=5`. To moment demo.
+- ~6 need-points in a 30×30 km square, including a far one with `severity=5`.
+- ~15 crates in trip corridors.
+- ~5 trips crossing the center, budgets varied 5–15 min.
+- Tuned so that `nearest_fit` serves a nearby low-urgency point, while `fair_share`
+  reaches the far `severity=5` point. That is the demo moment.
 
 ## 9. Smoke test (`tests/test_smoke.py`)
 
-1. `GET /state` → są sugestie.
-2. `POST /claim` pierwszej sugestii → `200`.
-3. `GET /state` → crates `claimed`, trip `used`, `delivered` wzrosło, sugestia zniknęła.
-4. `POST /mode {nearest_fit}` → `200`, inne uporządkowanie.
-5. `POST /reset` → stan wraca do seeda.
+1. `GET /state` → there are suggestions.
+2. `POST /claim` of the first suggestion → `200`.
+3. `GET /state` → crates `claimed`, trip `used`, `delivered` grew, the suggestion is gone.
+4. `POST /mode {nearest_fit}` → `200`, different ordering.
+5. `POST /reset` → the state returns to the seed.
 
-## 10. Harmonogram 2 h
+## 10. 2 h schedule
 
-| Czas | Krok | Checkpoint |
+| Time | Step | Checkpoint |
 |---|---|---|
-| 0:00–0:15 | `config`, `db` (DDL + seed) | `GET /state` zwraca seed bez solvera |
-| 0:15–0:50 | `geometry` + `solver` | rozłączne sugestie fair vs nearest |
-| 0:50–1:10 | `main` (endpointy + claim + Lock) | smoke test przechodzi |
-| 1:10–1:35 | frontend: mapa, panel, toggle, claim | klikanie E2E |
-| 1:35–1:50 | seed pod kontrast + ręczne demo | różnica trybów widoczna |
-| 1:50–2:00 | polish, freeze, README run | `./run.sh` startuje od zera |
+| 0:00–0:15 | `config`, `db` (DDL + seed) | `GET /state` returns the seed without the solver |
+| 0:15–0:50 | `geometry` + `solver` | disjoint fair vs nearest suggestions |
+| 0:50–1:10 | `main` (endpoints + claim + Lock) | smoke test passes |
+| 1:10–1:35 | frontend: map, panel, toggle, claim | clickable end to end |
+| 1:35–1:50 | contrast seed + manual demo | mode difference visible |
+| 1:50–2:00 | polish, freeze, README run | `./run.sh` starts from scratch |
 
-## 11. Ryzyka
+## 11. Risks
 
-- **Brak kontrastu w seedzie** → największe ryzyko demo; +10 min na seed.
-- **Zbyt szeroki korytarz** → wszystko wpada do jednego kandydata; zróżnicuj budżety.
-- **Greedy faworyzuje duże punkty** (suma log per kategoria) → akceptowalne w MVP.
+- **No contrast in the seed** → the biggest demo risk; spend +10 min on the seed.
+- **Corridor too wide** → everything falls into one candidate; vary the budgets.
+- **Greedy favors large points** (sum of logs per category) → acceptable in the MVP.
 
-## 12. Twarde cięcia
+## 12. Hard cuts
 
-Bez ILP/OR-Tools, bez QR, bez okien czasowych, bez auth, bez animacji, bez wielu objazdów
-na przejazd, bez testów jednostkowych.
+No ILP/OR-Tools, no QR, no time windows, no auth, no animations, no multiple detours per trip,
+no unit tests.

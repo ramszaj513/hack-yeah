@@ -1,10 +1,19 @@
-# Model korytarza i budżetu objazdu zamiast globalnego VRP
+# Corridor and detour-budget model instead of a global VRP
 
-Dopasowanie liczymy lokalnie: każdy **przejazd** to odcinek `origin → destination` z **budżetem objazdu**, a skrzynki i punkty potrzeb wpadają w wyznaczony wokół niego **korytarz**. Zamiast tworzyć nowe kursy (jak w modelu dyspozytorskim) wykorzystujemy przejazdy, które i tak się dzieją. Rozważaliśmy klasyczne podejście — jeden globalny solve nad całą pulą (stary ADR 0004) — oraz niezależne solve per punkt potrzeb (stary ADR 0003). Odrzuciliśmy oba: globalny solve rośnie kosztowo z całym popytem, a per‑punkt gubi konkurencję o te same zasoby. Model korytarza jest z natury przyrostowy, lokalny i tani obliczeniowo.
+We compute matching locally: each **trip** is a segment `origin → destination` with a
+**detour budget**, and crates and need-points fall into a **corridor** drawn around it.
+Instead of creating new jobs (as in a dispatch model), we use trips that are happening
+anyway. We considered the classic approach — a single global solve over the whole pool (old
+ADR 0004) — and independent solves per need-point (old ADR 0003). We rejected both: a global
+solve grows in cost with total demand, and per-point solving loses competition for the same
+resources. The corridor model is inherently incremental, local, and computationally cheap.
 
 ## Consequences
 
-- Złożoność rzędu `O(przejazdy × pobliskie skrzynki)` — bez macierzy odległości i bez solvera VRP.
-- Jakość dopasowania zależy od jakości zadeklarowanych przejazdów; jeśli nikt nie jedzie w danym kierunku, dana skrzynka poczeka.
-- Odległości są przybliżone (Haversine), więc `extra_minutes` to szacunek — zawsze pokazujemy go jawnie na mapie.
-- Model jest odporny na brak łączności: przejazdy i korytarze można przeliczyć lokalnie, bez chmury.
+- Complexity on the order of `O(trips × nearby crates)` — no distance matrix and no VRP solver.
+- Match quality depends on the quality of declared trips; if nobody drives in a given
+  direction, a crate waits.
+- Distances are approximate (Haversine), so `extra_minutes` is an estimate — we always show
+  it explicitly on the map.
+- The model is resilient to loss of connectivity: trips and corridors can be recomputed
+  locally, without the cloud.

@@ -1,10 +1,10 @@
-# Cel sprawiedliwościowy (wklęsła użyteczność) zamiast minimalizacji dystansu
+# A fairness objective (concave utility) instead of distance minimization
 
-Solver nie minimalizuje czasu ani odległości, lecz maksymalizuje `Σ_n severity_n · log(1 + delivered_n)` — wklęsłą użyteczność ważoną pilnością punktów potrzeb. Rozważaliśmy klasyczny cel „najkrótsza droga / najniższy koszt”, typowy dla aplikacji przewozowych, oraz twarde ograniczenie „każdy punkt dostaje co najmniej X”. Pierwszy systematycznie zagładza dalekie i trudniejsze punkty, drugi bywa niewykonalny przy braku zasobów. Wklęsła użyteczność daje diminishing returns: każda kolejna jednostka dla już obsłużonego punktu jest warta mniej, więc solver sam się rozkłada i nie może zignorować pilnego, odległego punktu. To jest główna różnica względem „kolejnego Ubera”.
+The solver does not minimize time or distance; it maximizes `Σ_n severity_n · log(1 + delivered_n)` — a concave utility weighted by need-point urgency. We considered the classic objective "shortest path / lowest cost", typical of ride-hailing apps, and a hard constraint "every point gets at least X". The first systematically starves distant and harder points; the second is often infeasible when resources are scarce. Concave utility gives diminishing returns: each additional unit for an already-served point is worth less, so the solver spreads itself out and cannot ignore an urgent, distant point. This is the main difference from "yet another Uber".
 
 ## Consequences
 
-- Sprawiedliwość jest mierzalna: **Starvation Index** i wskaźnik zapełnienia punktów.
-- Możliwy jest uczciwy kompromis „mniej optymalny dystansowo, ale szerszy zasięg” — pokazujemy go przełącznikiem `nearest_fit ↔ fair_share`.
-- Wklęsły cel utrudnia dokładne ILP, ale rozwiązanie zachłanne (marginal gain) jest szybkie i wytłumaczalne.
-- Zdefiniowanie `delivered_n` (jednostki łączne vs per kategoria) wymaga decyzji; MVP używa jednostek łącznych.
+- Fairness becomes measurable: the **Starvation Index** and the point fill rate.
+- An honest trade-off is possible: "less optimal in distance, but broader in reach" — we show it with the `nearest_fit ↔ fair_share` switch.
+- A concave objective makes exact ILP harder, but a greedy solution (marginal gain) is fast and explainable.
+- Defining `delivered_n` (total units vs per category) requires a decision; the MVP uses total units.

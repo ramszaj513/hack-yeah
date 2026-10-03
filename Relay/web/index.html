@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Relay — sprawiedliwa pomoc na trasach</title>
+  <title>Relay — fair aid on trips that happen anyway</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
         crossorigin="" />
@@ -17,110 +17,237 @@
       <header class="panel-head">
         <div class="head-row">
           <h1>Relay</h1>
-          <button id="help-btn" class="help-btn" title="Jak używać aplikacji?">?</button>
+          <button id="help-btn" class="help-btn" title="How do I use this app?">?</button>
         </div>
-        <p class="tagline">Sprawiedliwa pomoc na trasach, które i tak się dzieją.</p>
+        <p class="tagline">Fair aid on trips that happen anyway.</p>
       </header>
 
-      <section class="quickstart">
-        <strong>Jak to czytać?</strong>
-        <ol>
-          <li>Wybierz <b>tryb</b> (Fair-share vs Nearest-fit).</li>
-          <li>Popatrz na <b>pomarańczowe linie</b> — to propozycje objazdów.</li>
-          <li>Kliknij <b>Przejmij</b>, żeby zrealizować dostawę.</li>
-        </ol>
-        <button class="link-btn" id="help-btn-2">Pełna instrukcja →</button>
-      </section>
+      <nav class="tabs" id="tabs">
+        <button data-tab="demo" class="active">Demo</button>
+        <button data-tab="add">Add</button>
+        <button data-tab="manage">Manage</button>
+        <button data-tab="compare">Compare</button>
+      </nav>
 
-      <section class="block">
-        <h2>1 · Tryb dopasowania</h2>
-        <div class="mode-switch" id="mode-switch">
-          <button data-mode="fair_share">Fair-share</button>
-          <button data-mode="nearest_fit">Nearest-fit</button>
-        </div>
-        <p class="hint" id="mode-hint"></p>
-      </section>
+      <!-- ============ DEMO ============ -->
+      <section id="tab-demo" class="tab">
+        <section class="quickstart">
+          <strong>How to read this</strong>
+          <ol>
+            <li>Pick a <b>mode</b> (Fair-share vs Nearest-fit).</li>
+            <li>Watch the <b>orange lines</b> — suggested detours.</li>
+            <li>Click <b>Claim</b>, then run the <b>pickup / delivery</b> checkpoints.</li>
+          </ol>
+          <button class="link-btn" id="help-btn-2">Full guide →</button>
+        </section>
 
-      <section class="block">
-        <h2>2 · Starvation Index</h2>
-        <p class="section-help">Niezaspokojone potrzeby ważone pilnością. Niżej = lepiej.
-          „Stan” to baza, „po sugestiach” — gdyby przejąć wszystkie propozycje.</p>
-        <div class="starvation">
-          <div class="starve-now">
-            <span class="starve-value" id="starvation-value">—</span>
-            <span class="starve-label">stan</span>
+        <section class="block">
+          <h2>1 · Matching mode</h2>
+          <div class="mode-switch" id="mode-switch">
+            <button data-mode="fair_share">Fair-share</button>
+            <button data-mode="nearest_fit">Nearest-fit</button>
           </div>
-          <div class="starve-arrow">→</div>
-          <div class="starve-proj">
-            <span class="starve-value" id="starvation-proj">—</span>
-            <span class="starve-label">po sugestiach</span>
+          <p class="hint" id="mode-hint"></p>
+        </section>
+
+        <section class="block">
+          <h2>2 · Starvation Index</h2>
+          <p class="section-help">Unmet demand weighted by urgency. Lower is better.
+            “Now” is the actual state; “after suggestions” assumes every proposal is claimed.</p>
+          <div class="starvation">
+            <div class="starve-now">
+              <span class="starve-value" id="starvation-value">—</span>
+              <span class="starve-label">now</span>
+            </div>
+            <div class="starve-arrow">→</div>
+            <div class="starve-proj">
+              <span class="starve-value" id="starvation-proj">—</span>
+              <span class="starve-label">after suggestions</span>
+            </div>
           </div>
-        </div>
-        <div class="points" id="points"></div>
+          <div class="counters" id="counters"></div>
+          <div class="points" id="points"></div>
+        </section>
+
+        <section class="block">
+          <h2>3 · Suggested detours <span class="count" id="suggestions-count">0</span></h2>
+          <p class="section-help">Ephemeral proposals with a limited validity. Nothing is
+            reserved until you click “Claim”.</p>
+          <div class="suggestions" id="suggestions"></div>
+        </section>
+
+        <section class="block">
+          <h2>4 · Active detours <span class="count" id="detours-count">0</span></h2>
+          <p class="section-help">Claimed detours and their checkpoints:
+            claimed → picked up → delivered.</p>
+          <div class="detours" id="detours"></div>
+        </section>
+
+        <section class="block">
+          <h2>Controls</h2>
+          <button class="ghost" id="reset-btn">Reset to seed</button>
+        </section>
+
+        <footer class="panel-foot">
+          <span id="legend-cats"></span>
+        </footer>
       </section>
 
-      <section class="block">
-        <h2>3 · Sugerowane objazdy <span class="count" id="suggestions-count">0</span></h2>
-        <p class="section-help">Propozycje dopasowania. Nic nie jest zarezerwowane, dopóki
-          nie klikniesz „Przejmij”.</p>
-        <div class="suggestions" id="suggestions"></div>
+      <!-- ============ ADD ============ -->
+      <section id="tab-add" class="tab" hidden>
+        <p class="section-help">Report new data. Same API the demo uses — the seed is only a
+          starting point.</p>
+
+        <section class="block">
+          <h2>New crate</h2>
+          <form id="form-crate" class="form">
+            <label>Category
+              <select name="category" class="cat-select"></select>
+            </label>
+            <div class="row">
+              <label>Latitude <input name="lat" type="number" step="any" value="52.2297" required></label>
+              <label>Longitude <input name="lon" type="number" step="any" value="21.0117" required></label>
+            </div>
+            <button type="submit" class="primary">Add crate</button>
+          </form>
+        </section>
+
+        <section class="block">
+          <h2>New trip</h2>
+          <form id="form-trip" class="form">
+            <div class="row">
+              <label>From lat <input name="olat" type="number" step="any" value="52.20" required></label>
+              <label>From lon <input name="olon" type="number" step="any" value="21.00" required></label>
+            </div>
+            <div class="row">
+              <label>To lat <input name="dlat" type="number" step="any" value="52.27" required></label>
+              <label>To lon <input name="dlon" type="number" step="any" value="21.05" required></label>
+            </div>
+            <div class="row">
+              <label>Detour budget (min) <input name="detour_budget_min" type="number" step="any" value="10" min="0.1" required></label>
+              <label>Free slots <input name="slots_free" type="number" step="1" value="3" min="1" required></label>
+            </div>
+            <button type="submit" class="primary">Add trip</button>
+          </form>
+        </section>
+
+        <section class="block">
+          <h2>New need-point</h2>
+          <form id="form-need" class="form">
+            <div class="row">
+              <label>Name <input name="name" type="text" value="New point" required></label>
+              <label>Urgency
+                <select name="severity">
+                  <option value="1">1</option><option value="2">2</option>
+                  <option value="3" selected>3</option><option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label>Latitude <input name="lat" type="number" step="any" value="52.25" required></label>
+              <label>Longitude <input name="lon" type="number" step="any" value="21.03" required></label>
+            </div>
+            <p class="form-label">Demand per category</p>
+            <div class="req-grid" id="need-reqs"></div>
+            <button type="submit" class="primary">Add need-point</button>
+          </form>
+        </section>
       </section>
 
-      <section class="block">
-        <h2>Sterowanie</h2>
-        <button class="ghost" id="reset-btn">Reset do seeda</button>
+      <!-- ============ MANAGE ============ -->
+      <section id="tab-manage" class="tab" hidden>
+        <p class="section-help">Edit or delete resources. Only available crates and trips can
+          be changed; need-points can be edited at any time.</p>
+        <input type="search" id="manage-search" class="search" placeholder="Filter by name or id…" />
+
+        <section class="block">
+          <h2>Need-points <span class="count" id="manage-needs-count">0</span></h2>
+          <div class="manage-list" id="manage-needs"></div>
+        </section>
+        <section class="block">
+          <h2>Trips <span class="count" id="manage-trips-count">0</span></h2>
+          <div class="manage-list" id="manage-trips"></div>
+        </section>
+        <section class="block">
+          <h2>Crates <span class="count" id="manage-crates-count">0</span></h2>
+          <div class="manage-list" id="manage-crates"></div>
+        </section>
       </section>
 
-      <footer class="panel-foot">
-        <span id="legend-cats"></span>
-      </footer>
+      <!-- ============ COMPARE ============ -->
+      <section id="tab-compare" class="tab" hidden>
+        <p class="section-help">The same data scored by both algorithms. This preview does not
+          change the stored mode.</p>
+        <button class="primary" id="compare-refresh">Run comparison</button>
+        <div id="compare-summary" class="compare-summary"></div>
+        <table class="compare-table" id="compare-table" hidden>
+          <thead>
+            <tr><th>Point</th><th>Sev</th><th>Fair-share</th><th>Nearest-fit</th><th>Δ</th></tr>
+          </thead>
+          <tbody id="compare-body"></tbody>
+        </table>
+      </section>
     </aside>
   </div>
 
   <div id="toast" class="toast"></div>
 
-  <!-- Skrócona instrukcja w aplikacji -->
+  <!-- In-app quick guide -->
   <div id="help-overlay" class="help-overlay" hidden>
     <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
-      <button class="help-close" id="help-close" title="Zamknij">×</button>
-      <h2 id="help-title">Jak używać Relay</h2>
+      <button class="help-close" id="help-close" title="Close">×</button>
+      <h2 id="help-title">How to use Relay</h2>
 
       <p class="help-lead">
-        Relay wpasowuje dary w przejazdy, które i tak się dzieją, i rozdziela pomoc
-        <b>sprawiedliwie</b> — tak, żeby dalekie i pilne punkty nie zostały bez wsparcia.
+        Relay fits donations into trips that are happening anyway, and distributes aid
+        <b>fairly</b> — so that far-away, urgent points are not left without support.
       </p>
 
-      <h3>Mapa</h3>
+      <h3>The map</h3>
       <ul class="help-legend">
-        <li><span class="key line-gray"></span> szara linia — <b>przejazd</b> (O → D)</li>
-        <li><span class="key dot-small"></span> mała kropka — <b>skrzynka</b> (kolor = kategoria)</li>
-        <li><span class="key dot-big"></span> duże koło — <b>punkt potrzeb</b> (kolor = pilność, rozmiar = braki)</li>
-        <li><span class="key line-orange"></span> pomarańczowa linia — <b>sugerowany objazd</b></li>
+        <li><span class="key line-gray"></span> grey line — <b>trip</b> (O → D)</li>
+        <li><span class="key dot-small"></span> small dot — <b>crate</b> (color = category)</li>
+        <li><span class="key dot-big"></span> big circle — <b>need-point</b> (color = urgency, size = unmet)</li>
+        <li><span class="key line-orange"></span> orange line — <b>suggested detour</b></li>
+        <li><span class="key line-teal"></span> colored line — <b>active detour</b> (claimed/picked up/delivered)</li>
       </ul>
 
-      <h3>Panel — 3 kroki</h3>
-      <ol class="help-steps">
-        <li><b>Tryb:</b> Fair-share (sprawiedliwy) albo Nearest-fit (baseline „Uber”).</li>
-        <li><b>Starvation Index:</b> „stan” vs „po sugestiach” + słupki zapełnienia punktów.</li>
-        <li><b>Sugerowane objazdy:</b> kliknij <b>Przejmij</b>, żeby zrealizować dostawę.</li>
-      </ol>
+      <h3>The tabs</h3>
+      <ul class="help-steps">
+        <li><b>Demo</b> — mode switch, metrics, suggestions, active detours, checkpoints.</li>
+        <li><b>Add</b> — report crates, trips and need-points.</li>
+        <li><b>Manage</b> — edit or delete resources, filter the map.</li>
+        <li><b>Compare</b> — Fair-share vs Nearest-fit on the same data.</li>
+      </ul>
 
-      <h3>Najkrótsze demo</h3>
+      <h3>Suggested detours and checkpoints</h3>
       <p>
-        Ustaw <b>Fair-share</b> → zobacz, że daleki punkt „Rembertów-Wschód” (pilność 5)
-        jest obsłużony. Kliknij <b>Reset</b>, ustaw <b>Nearest-fit</b> → ten sam punkt ma 0%,
-        a <b>Starvation Index jest wyższy</b>. To cała różnica.
+        A suggestion is valid for a limited time (a countdown is shown). <b>Claim</b> it to
+        reserve the crates, then confirm <b>Picked up</b> and <b>Delivered</b> at your pace.
       </p>
 
-      <p class="help-note">
-        Sugestie są efemeryczne — nie rezerwują zasobów, dopóki nie klikniesz „Przejmij”.
-        Pierwsze przejęcie wygrywa.
+      <h3>The shortest demo</h3>
+      <p>
+        On the <b>Compare</b> tab, run the comparison: the far-away “Rembertow East” point
+        (urgency 5) is served under Fair-share but starved under Nearest-fit — and the
+        Starvation Index differs. That is the whole difference.
       </p>
 
       <label class="help-remember">
-        <input type="checkbox" id="help-hide" /> Nie pokazuj przy następnym wejściu
+        <input type="checkbox" id="help-hide" /> Don't show this on my next visit
       </label>
-      <button class="help-primary" id="help-ok">Rozumiem, zaczynam</button>
+      <button class="help-primary" id="help-ok">Got it, let's start</button>
+    </div>
+  </div>
+
+  <!-- Generic edit modal -->
+  <div id="edit-overlay" class="help-overlay" hidden>
+    <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+      <button class="help-close" id="edit-close" title="Close">×</button>
+      <h2 id="edit-title">Edit</h2>
+      <form id="edit-form" class="form"></form>
+      <button class="primary" id="edit-save">Save changes</button>
     </div>
   </div>
 

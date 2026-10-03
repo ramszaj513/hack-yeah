@@ -1,84 +1,103 @@
-# Relay — słownik dziedziny
+# Relay — domain glossary
 
-Wspólny język projektu. Terminy techniczne zostawiamy po angielsku, żeby zgadzały się z kodem i API.
+The project's shared language. Technical terms stay in English so they match the code and API.
 
-## Aktorzy
+## Actors
 
-**Mieszkaniec (Citizen)**
-Zarejestrowana osoba, która może zgłaszać **skrzynki**, **przejazdy**, albo jedno i drugie. Nie ma osobnych kont „darczyńca” i „kierowca”.
-_Avoid_: Donor, User (jako typ konta)
+**Resident (Citizen)**
+A registered person who can report **crates**, **trips**, or both. There are no separate
+"donor" and "driver" accounts.
+_Avoid_: Donor, User (as an account type)
 
 **Administrator (Admin)**
-Operator służb, który tworzy **punkty potrzeb** i ustawia ich pilność.
+A responder/operator who creates **need-points** and sets their urgency.
 _Avoid_: Dispatcher, Operator
 
-## Dostawa
+## Delivery
 
-**Skrzynka (Crate)**
-Standardowa jednostka darowizny: jedna **kategoria**, jedna objętość, lokalizacja u darczyńcy. Kierowca przewozi skrzynki zajmujące po jednym **slocie**. Kod QR to rozszerzenie poza MVP — w MVP skrzynka ma tylko tekstowy `id`.
-_Avoid_: Resource, Item, Donation, Paczka
+**Crate**
+The standard donation unit: one **category**, one volume, the donor's location. A driver
+carries crates that each take one **slot**. A QR code is a post-MVP extension — in the MVP a
+crate only has a text `id`.
+_Avoid_: Resource, Item, Donation, Package
 
-**Kategoria (Category)**
-Jedna z ustalonych wartości (żywność, woda, leki, higiena, inne), wspólna dla skrzynek i zapotrzebowania punktów potrzeb.
+**Category**
+One of the fixed values (food, water, meds, hygiene, other), shared by crates and
+need-point demand.
 _Avoid_: Type
 
-**Przejazd (Trip)**
-Deklaracja mieszkańca, że wykonuje trasę `origin → destination`, z **budżetem objazdu** (ile minut gotów dołożyć) i liczbą **wolnych slotów**. Zastępuje dawne „Transport Offer”. W MVP okno czasowe jest pomijane — liczy się wyłącznie geometria i budżet objazdu.
-_Avoid_: Transport Offer, Kurs, Zlecenie
+**Trip**
+A resident's declaration that they are driving `origin → destination`, with a **detour
+budget** (how many minutes they are willing to add) and a number of **free slots**. It
+replaces the former "Transport Offer". In the MVP the time window is skipped — only geometry
+and the detour budget matter.
+_Avoid_: Transport Offer, Ride, Job
 
-**Budżet objazdu (Detour Budget)**
-Maksymalny dodatkowy czas, jaki kierowca zgadza się poświęcić na pomoc, wyrażony w minutach. Wyznacza dopuszczalny koszt objazdu i szerokość korytarza.
+**Detour Budget**
+The maximum extra time a driver agrees to spend helping, expressed in minutes. It determines
+the allowed detour cost and the corridor width.
 _Avoid_: Extra time, Limit
 
-**Punkt potrzeb (Need-Point)**
-Lokalizacja utworzona przez administratora z **zapotrzebowaniem** (per kategoria) i **pilnością**. Otwarty, dopóki zapotrzebowanie nie zostanie zaspokojone.
+**Need-Point**
+A location created by the administrator with **demand** (per category) and **urgency**.
+Open until the demand is satisfied.
 _Avoid_: Incident, Site, Demand
 
-**Zapotrzebowanie (Requirement)**
-Ilości per kategoria, których punkt potrzeb jeszcze potrzebuje (`remaining = needed − delivered`). Maleje w miarę dostaw; punkt zamyka się, gdy wszystko osiągnie zero.
+**Requirement**
+The quantities per category that a need-point still needs (`remaining = needed − delivered`).
+It shrinks as deliveries arrive; the point closes when everything reaches zero.
 _Avoid_: Quota, Need
 
-**Pilność (Severity)**
-Waga 1–5 przypisana punktowi potrzeb. Steruje sprawiedliwością: wklęsła użyteczność premiuje obsługę punktów o wyższej pilności.
-_Avoid_: Priorytet (jako osobny byt)
+**Urgency (Severity)**
+A weight 1–5 assigned to a need-point. It drives fairness: concave utility rewards serving
+points with higher urgency.
+_Avoid_: Priority (as a separate entity)
 
-## Dopasowanie
+## Matching
 
-**Optymalizacja (Run)**
-Jedno przeliczenie solvera nad pulą, produkujące zero lub więcej **sugerowanych objazdów**. W MVP odbywa się przy każdym `GET /state` (po każdym zdarzeniu).
+**Run**
+A single solver computation over the pool, producing zero or more **suggested detours**. In
+the MVP it happens on every `GET /state` (after every event).
 _Avoid_: Solve, Batch, Cycle
 
-**Pula (Residual Pool)**
-Skrzynki i przejazdy nieprzypisane jeszcze do żadnego przejętego objazdu. Tylko ją widzi optymalizacja.
+**Residual Pool**
+The crates and trips not yet assigned to any claimed detour. Only this pool is visible to a
+run.
 _Avoid_: Backlog, Queue
 
-**Objazd (Detour)**
-Skrzynki zebrane wzdłuż korytarza jednego przejazdu i dostarczone do jednego punktu potrzeb. Powstaje jako **sugerowany objazd**, zanim kierowca go przejmie.
+**Detour**
+Crates collected along one trip's corridor and delivered to one need-point. It exists as a
+**suggested detour** before the driver claims it.
 _Avoid_: Route, Trip, Job
 
-**Sugerowany objazd (Suggested Detour)**
-Efemeryczna propozycja objazdu przed przejęciem. Nie jest zapisywana w bazie; nie rezerwuje zasobów i znika przy następnym przeliczeniu (zob. ADR 0005). Sugestie w jednym przeliczeniu są wzajemnie rozłączne.
+**Suggested Detour**
+An ephemeral detour proposal before it is claimed. It is not stored in the database; it does
+not reserve resources and disappears on the next recomputation (see ADR 0005). Suggestions
+within one run are mutually disjoint.
 _Avoid_: Proposal, Draft
 
-**Przejęcie (Claim)**
-Jawna akceptacja sugerowanego objazdu przez kierowcę. Atomowa transakcja: skrzynki stają się `claimed`, przejazd `used`, zapotrzebowanie maleje.
+**Claim**
+Explicit acceptance of a suggested detour by the driver. An atomic transaction: crates become
+`claimed`, the trip becomes `used`, and demand decreases.
 _Avoid_: Accept, Assignment
 
-## Metryki i UX
+## Metrics and UX
 
-**Korytarz (Corridor)**
-Obszar wokół łamanej `[O, N, D]` dla pary przejazd–punkt, o szerokości wynikającej z budżetu objazdu. Tylko skrzynki w korytarzu są brane pod uwagę.
-_Avoid_: Buffer, Strefa
+**Corridor**
+The area around the polyline `[O, N, D]` for a trip–point pair, with a width derived from the
+detour budget. Only crates inside the corridor are considered.
+_Avoid_: Buffer, Zone
 
 **Starvation Index**
-Ważony pilnością wskaźnik niezaspokojonego zapotrzebowania:
-`Σ_n severity_n·(unmet_n/capacity_n) / Σ_n severity_n × 100%`. Główna metryka sprawiedliwości w demo.
-_Avoid_: Deficit, Braki
+The urgency-weighted indicator of unmet demand:
+`Σ_n severity_n·(unmet_n/capacity_n) / Σ_n severity_n × 100%`. The main fairness metric in the
+demo.
+_Avoid_: Deficit, Shortage
 
-**Zapełnienie (Fill)**
-Procent zaspokojenia punktu potrzeb: `100% · (1 − unmet/capacity)`.
+**Fill**
+The percentage of a need-point's demand that is satisfied: `100% · (1 − unmet/capacity)`.
 _Avoid_: Completion
 
 **Checkpoint**
-Ręczne potwierdzenie przez kierowcę (odebrane / dostarczone). Opcjonalne i poza MVP.
+A manual confirmation by the driver (picked up / delivered). Optional and out of MVP scope.
 _Avoid_: Status update

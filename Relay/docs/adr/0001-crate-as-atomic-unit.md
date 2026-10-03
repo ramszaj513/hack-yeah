@@ -1,10 +1,10 @@
-# Skrzynka jako atomowa jednostka zamiast abstrakcyjnej ilości
+# Crate as an atomic unit instead of an abstract quantity
 
-Dary modelujemy jako **skrzynki**: jednostkowa objętość, jedna kategoria, kod QR, lokalizacja darczyńcy. `Resource` z pierwotnego modelu to abstrakcyjna ilość bez objętości, a `Transport Offer` nie deklaruje ładowności — w efekcie solver mógł zaplanować trasę, której żaden samochód fizycznie nie przewiezie. Zamiast dodawać wymiar wagowo-objętościowy rozważaliśmy dwie alternatywy: skalar „mieści N standardowych jednostek” oraz prawdziwy model waga+objętość. Oba wymagają zbierania nowych danych od każdego mieszkańca i dokładają realny wymiar do solvera. Wybraliśmy jedną standardową skrzynkę, bo sprowadza ładowność do liczenia slotów i daje fizyczny, skanowalny artefakt na demo.
+We model donations as **crates**: unit volume, one category, a QR code, the donor's location. The `Resource` of the original model was an abstract quantity with no volume, and `Transport Offer` did not declare capacity — as a result the solver could plan a route that no car could physically carry. Instead of adding a weight/volume dimension, we considered two alternatives: a scalar "holds N standard units" and a true weight+volume model. Both require collecting new data from every resident and add a real dimension to the solver. We chose a single standard crate because it reduces capacity to slot counting and gives a physical, scannable artifact for the demo.
 
 ## Consequences
 
-- Ładowność = liczba **wolnych slotów** przejazdu; problem nieprzewidywalnej ładowności znika.
-- Standaryzacja ogranicza nietypowe dary — wszystko musi zmieścić się w jednej objętości skrzynki.
-- Skrzynka nie niesie wagi, więc teoretycznie kierowca może dostać ładunek cięższy niż wygodny; przyjmujemy to jako świadomy kompromis skali hackathonu.
-- Kod QR otwiera drogę do późniejszej weryfikacji łańcucha dostaw (proof-of-impact) bez zmiany modelu.
+- Capacity = the number of a trip's **free slots**; the problem of unpredictable capacity disappears.
+- Standardization limits unusual donations — everything must fit within one crate volume.
+- A crate carries no weight, so in theory a driver could receive a load heavier than is comfortable; we accept this as a deliberate hackathon-scale trade-off.
+- A QR code opens the door to later supply-chain verification (proof-of-impact) without changing the model.

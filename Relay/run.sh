@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Relay — lokalne uruchomienie całej aplikacji (backend + frontend).
+# Relay — run the whole application locally (backend + frontend).
 #
-#   ./run.sh              # start z auto-reloadem na http://127.0.0.1:8000
-#   PORT=9000 ./run.sh    # inny port
-#   NO_RELOAD=1 ./run.sh  # bez auto-reloadu
+#   ./run.sh              # start with auto-reload at http://127.0.0.1:8000
+#   PORT=9000 ./run.sh    # use another port
+#   NO_RELOAD=1 ./run.sh  # disable auto-reload
 #
-# `uv run` sam utworzy środowisko i zainstaluje zależności z pyproject.toml.
+# `uv run` creates the environment and installs dependencies from pyproject.toml.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -17,7 +17,7 @@ if [[ "${NO_RELOAD:-0}" == "1" ]]; then
   RELOAD_ARGS=()
 fi
 
-echo "Relay → http://${HOST}:${PORT}"
+echo "Relay -> http://${HOST}:${PORT}"
 exec uv run uvicorn app.main:app \
   --host "$HOST" --port "$PORT" \
   "${RELOAD_ARGS[@]}" "$@"

@@ -1,198 +1,232 @@
-# Relay — instrukcja obsługi
+# Relay — user manual
 
-Przewodnik po aplikacji: co pokazuje, co oznaczają poszczególne elementy i jak
-przeprowadzić demo. Wersja skrócona jest też dostępna w aplikacji pod przyciskiem **?**
-w prawym górnym rogu panelu.
-
----
-
-## 1. Po co to jest (w 30 sekund)
-
-W kryzysie dary są rozproszone po domach mieszkańców, a służby nie wiedzą, kto i kiedy
-może coś dowieźć. Relay **wpasowuje pomoc w przejazdy, które i tak się dzieją** — ktoś
-jedzie z punktu A do B, a my po drodze dorzucamy mu skrzynki.
-
-Klasyczny optymalizator wysyła pomoc tam, gdzie jest **najbliżej i najłatwiej** — dalekie,
-pilne punkty zostają bez wsparcia. Relay rozdziela pomoc **sprawiedliwie**: żaden punkt,
-nawet daleki i pilny, nie zostaje zagłodzony kosztem najbliższego.
-
-Cała idea jest w jednym przełączniku: **Nearest-fit** (tak działa „kolejny Uber”) vs
-**Fair-share** (tak działa Relay). Przełączasz, patrzysz na mapę i metrykę — i widzisz różnicę.
+A guide to the app: what it shows, what each element means, and how to run the demo.
+A shorter version is also available inside the app under the **?** button in the
+top-right corner of the panel.
 
 ---
 
-## 2. Słownik pojęć
+## 1. What this is (in 30 seconds)
 
-| Pojęcie | Znaczenie |
+In a crisis, donations are scattered across residents' homes, and responders do not know
+who can deliver what, or when. Relay **fits aid into trips that are happening anyway** —
+someone is driving from point A to B, and we add crates along the way.
+
+A classic optimizer sends aid wherever it is **nearest and easiest** — distant, urgent
+points are left without support. Relay distributes aid **fairly**: no point, no matter how
+far or urgent, is starved in favor of the nearest one.
+
+The whole idea lives in one switch: **Nearest-fit** (how "yet another Uber" works) vs
+**Fair-share** (how Relay works). Flip it, or open the **Compare** tab and see both side by
+side on the same data.
+
+---
+
+## 2. Glossary
+
+| Term | Meaning |
 |---|---|
-| **Skrzynka** (crate) | Standardowa jednostka daru: jedna kategoria, jedna objętość, jedna lokalizacja. Zajmuje 1 slot. |
-| **Przejazd** (trip) | Deklaracja: „jadę z `origin` do `destination`”. Ma **budżet objazdu** i **wolne sloty**. |
-| **Budżet objazdu** | Ile minut kierowca gotów jest dołożyć (5–15 min). Wyznacza, jak szeroki korytarz łapiemy. |
-| **Punkt potrzeb** (need-point) | Miejsce z zapotrzebowaniem na kategorie i **pilnością** (1–5). |
-| **Zapotrzebowanie** | Ile jeszcze danej kategorii brakuje punktowi. Punkt zamyka się, gdy brak = 0. |
-| **Pilność** (severity) | Waga 1–5. Steruje sprawiedliwością: wyższa pilność = mocniejszy priorytet. |
-| **Korytarz** | Obszar wokół trasy `O → punkt → D`. Tylko skrzynki w korytarzu wchodzą do objazdu. |
-| **Sugerowany objazd** | Propozycja: „weź te skrzynki i zrób +X min, zawieź do punktu Y”. Efemeryczna — znika przy przeliczeniu. |
-| **Przejęcie** (claim) | Kliknięcie „Przejmij”. Skrzynki stają się zajęte, przejazd zużyty, a dostawa zapisana na stałe. |
-| **Starvation Index** | Wskaźnik niezaspokojonego zapotrzebowania ważony pilnością. Im niższy, tym lepiej. |
-| **Zapełnienie** (fill) | Procent zaspokojenia punktu. |
+| **Crate** | The standard donation unit: one category, one volume, one location. It takes 1 slot. |
+| **Trip** | A declaration: "I'm driving from `origin` to `destination`". It has a **detour budget** and **free slots**. |
+| **Detour budget** | How many minutes the driver is willing to add (5–15 min). It sets how wide the corridor is. |
+| **Need-point** | A place with demand per category and an **urgency** (1–5). |
+| **Requirement** | How much of a category a point still needs. The point closes when unmet reaches 0. |
+| **Urgency (severity)** | Weight 1–5. It drives fairness: higher urgency = stronger priority. |
+| **Corridor** | The area around the route `O → point → D`. Only crates in the corridor enter a detour. |
+| **Suggested detour** | A proposal: "take these crates and add +X min, deliver to point Y". It has a **limited validity** and reserves nothing. |
+| **Claim** | Clicking "Claim". The crates become `claimed`, the trip is used up, and the detour becomes active. |
+| **Checkpoint** | The driver's confirmation: **Picked up**, then **Delivered**. |
+| **Active detour** | A claimed detour moving through `claimed → picked up → delivered`. |
+| **Starvation Index** | A measure of unmet demand weighted by urgency. Lower is better. |
+| **Fill** | The percentage of a point's demand that is satisfied. |
 
 ---
 
-## 3. Mapa — co jest czym
+## 3. The map — what is what
 
-| Symbol na mapie | Znaczenie |
+| Map symbol | Meaning |
 |---|---|
-| **Szara przerywana linia** | Przejazd (`O → D`), który i tak się dzieje. |
-| **Mała kolorowa kropka** | Skrzynka. Kolor = kategoria (żywność, woda, leki, higiena, inne). |
-| **Duże kolorowe koło** | Punkt potrzeb. **Kolor = pilność** (zielony → czerwony). **Rozmiar = braki** (im większe, tym więcej brakuje). |
-| **Pomarańczowa linia** | Sugerowany objazd: `O → skrzynki → punkt potrzeb → D`. |
-| **Numerowany pomarańczowy znacznik** | Numer sugestii — odpowiada numerowi na liście w panelu. |
+| **Grey dashed line** | A trip (`O → D`) that is happening anyway. |
+| **Small colored dot** | A crate. Color = category. Crates that are claimed/delivered are faded and dashed. |
+| **Large colored circle** | A need-point. **Color = urgency** (green → red). **Size = unmet demand**. |
+| **Orange dashed line** | A suggested detour: `O → crates → need-point → D`. |
+| **Colored solid line** | An active detour. Color shows its status (claimed = blue, picked up = purple, delivered = green). |
+| **Numbered orange marker** | The suggestion number — it matches the panel list. |
 
-Kliknij dowolny obiekt na mapie, żeby zobaczyć szczegóły (np. punkt potrzeb pokaże
-zapełnienie teraz i po sugestiach).
-
-Legenda symboli jest też dostępna bezpośrednio na mapie (prawy górny róg).
-
----
-
-## 4. Panel — co jest czym
-
-1. **Tryb dopasowania** — przełącznik dwóch algorytmów:
-   - **Fair-share** (nasz) — maksymalizuje sprawiedliwość, sięga po dalekie i pilne punkty.
-   - **Nearest-fit** (baseline „Uber”) — minimalizuje objazd, wszystko płynie do najbliższego.
-2. **Starvation Index** — `stan → po sugestiach`. Pierwsza liczba to rzeczywisty stan bazy;
-   druga to stan, gdybyś przejął wszystkie widoczne sugestie. Poniżej słupki per punkt.
-3. **Sugerowane objazdy** — karty propozycji. Każda ma numer, czas objazdu, przejazd,
-   punkt docelowy, zysk użyteczności, listę skrzynek i przycisk **Przejmij**.
-4. **Sterowanie** — **Reset do seeda** przywraca scenariusz demonstracyjny.
-
-Przycisk **?** (prawy górny róg) otwiera skróconą instrukcję w aplikacji.
+The **Layers** box (top-left) toggles trips, crates, need-points, suggestions and active
+detours, and filters crates by category and need-points by status. The legend (top-right)
+explains the symbols. Click any object for details.
 
 ---
 
-## 5. Jak korzystać — krok po kroku
+## 4. The panel — tabs
 
-1. Otwórz `http://127.0.0.1:8000` (`./run.sh`) i poczekaj, aż mapa się narysuje.
-2. Zobacz stan startowy: punkty potrzeb na czerwono/zielono, szare trasy, kropki skrzynek.
-3. Wybierz tryb **Fair-share**. Spójrz na **Sugerowane objazdy** — pojawi się propozycja do
-   dalekiego punktu „Rembertów-Wschód” (pilność 5).
-4. Kliknij **Przejmij** przy wybranej sugestii. Mapa i panel odświeżą się:
-   - skrzynki znikną z puli,
-   - przejazd zmieni status na `used`,
-   - zapotrzebowanie punktu zmaleje, a **Starvation Index** spadnie.
-5. Kliknij **Reset do seeda**, żeby wrócić do punktu wyjścia.
-6. Przełącz na **Nearest-fit** i porównaj: te same dane, inny zestaw sugestii —
-   daleki punkt nie jest obsługiwany, a **Starvation Index jest wyższy**.
+The panel has four tabs:
 
-> **Zasada:** sugerowane objazdy są tylko propozycjami. Nic nie jest zarezerwowane, dopóki
-> nie klikniesz **Przejmij**. Dwóch kierowców może zobaczyć tę samą propozycję — wygrywa
-> ten, kto pierwszy kliknie (serwer odrzuci nieaktualne przejęcie).
+- **Demo** — mode switch, Starvation Index, fill bars, suggested detours, active detours and
+  the Reset button.
+- **Add** — forms to report crates, trips and need-points.
+- **Manage** — edit or delete resources and filter by name/id.
+- **Compare** — run Fair-share and Nearest-fit on the same data and see the difference.
 
----
+### Demo tab details
 
-## 6. Scenariusz demo (20 sekund, które robią wrażenie)
+1. **Matching mode** — Fair-share (ours) vs Nearest-fit (the "Uber" baseline).
+2. **Starvation Index** — `now → after suggestions`. The first number is the real state; the
+   second is the projection if every visible suggestion were claimed. Below it: counters
+   (crates in transit, physically delivered, active detours) and a fill bar per point.
+3. **Suggested detours** — each card shows the detour time, trip, target point, utility gain,
+   crate list, a **validity countdown**, and a **Claim** button.
+4. **Active detours** — claimed detours with **Picked up** / **Delivered** checkpoint buttons.
 
-1. Ustaw **Fair-share**.
-2. W panelu zwróć uwagę na daleki punkt **„Rembertów-Wschód” (severity 5)** — ma 0% na starcie,
-   ale sugestia go obejmuje, więc „po sugestiach” pokazuje 100%.
-3. **Przejmij** pierwszy objazd. Starvation Index spada.
-4. **Reset do seeda** → przełącz na **Nearest-fit**.
-5. Ten sam daleki punkt nadal ma **0%** i nie ma dla niego żadnej sugestii — pomoc utknęła
-   w najbliższych punktach. Porównaj **Starvation Index** (znacznie wyższy).
-6. Wróć na **Fair-share** — różnica jest widoczna na mapie, w słupkach i w metryce.
-
-To jest teza projektu: sprawiedliwość zamiast najkrótszej drogi.
+The **?** button (top-right) opens the short in-app guide.
 
 ---
 
-## 7. Jak czytać metryki
+## 5. How to use it — step by step
 
-- **Starvation Index** = `Σ severity · (braki / pojemność) / Σ severity · 100%`.
-  `0%` = nikt nie głoduje, `100%` = nic nie dotarło. Niższy = lepszy.
-- **`stan → po sugestiach`** — pierwsza wartość to baza, druga to **projekcja**, gdyby
-  wszystkie aktualne sugestie zostały przejęte. Projekcja pozwala porównać tryby bez
-  klikania „Przejmij”.
-- **Słupki punktów** — jasna część to stan obecny, półprzezroczysta to przyrost z sugestii.
-  Etykieta `X% → Y%` czyta się identycznie.
-- **Zysk użyteczności** na karcie sugestii to wartość funkcji celu (wklęsła użyteczność)
-  dla danej propozycji — wyższa = cenniejsza z punktu widzenia sprawiedliwości.
+1. Open `http://127.0.0.1:8000` (`./run.sh`) and wait for the map to render.
+2. On the **Demo** tab, pick **Fair-share**. A suggestion appears for the distant point
+   "Rembertow East" (urgency 5).
+3. Click **Claim** on a suggestion. The crates become `claimed` and the detour moves to the
+   **Active detours** section.
+4. Click **Picked up**, then **Delivered**. The crate statuses change on the map, and the
+   "delivered" counter rises.
+5. Use **Reset to seed** to return to the starting point.
+6. Switch to **Nearest-fit** and compare — or use the **Compare** tab (below).
+
+> **Validity:** a suggestion is valid for a limited time (countdown on the card). If it
+> expires before you claim it, it disappears and the system recomputes fresh ones. Nothing is
+> reserved until you click **Claim**, and the first claim wins.
 
 ---
 
-## 8. Fair-share vs Nearest-fit — o co chodzi
+## 6. The demo script (the 20 seconds that land)
 
-Cel Fair-share:
+1. Open the **Compare** tab and click **Run comparison**.
+2. Look at the far-away point **"Rembertow East" (urgency 5)**: Fair-share fills it, Nearest-fit
+   leaves it at 0%. Green rows are the fairness win.
+3. The header shows the **Starvation Index** for both modes — much lower for Fair-share.
+4. Back on the **Demo** tab with Fair-share, **Claim** the first detour and run the checkpoints.
+
+That is the project's thesis: fairness instead of the shortest path.
+
+---
+
+## 7. How to read the metrics
+
+- **Starvation Index** = `Σ severity · (unmet / capacity) / Σ severity · 100%`.
+  `0%` = nobody is starving, `100%` = nothing arrived. Lower is better.
+- **`now → after suggestions`** — base state vs. projection including all suggestions.
+- **Counters** — *in transit* = crates claimed or picked up; *delivered* = crates physically
+  delivered (checkpoint reached); *active detours* = claimed/picked-up/delivered detours.
+- **Fill bars** — solid = current state, translucent = gain from suggestions.
+- **Utility gain** — the objective value of a proposal; higher is more valuable for fairness.
+
+---
+
+## 8. Fair-share vs Nearest-fit — what is the difference
+
+The Fair-share objective:
 
 ```
 U = Σₙ severityₙ · Σ_c log(1 + deliveredₙ,c)
 ```
 
-Każda kolejna skrzynka dla już obsłużonego punktu jest warta **coraz mniej**
-(efekt malejących przychodów). Dzięki temu solver sam się rozkłada i nie może
-systematycznie zagłodzić odległego, pilnego punktu.
-
-Nearest-fit minimalizuje wyłącznie objazd, więc „kupuje” najtańsze dostawy i szybko
-zużywa przejazdy — zostawiając daleki punkt bez transportu. Oba tryby liczą **te same
-sugestie** z tej samej puli; różni je tylko sposób wyboru.
+Every additional crate for an already-served point is worth **less and less**
+(diminishing returns), so the solver spreads itself out and cannot systematically starve a
+distant, urgent point. Nearest-fit minimizes detour alone, so it quickly uses up trips on the
+cheapest deliveries. Both modes consider the same candidates; only the selection differs.
 
 ---
 
-## 9. Dodawanie własnych danych (API)
+## 9. Adding, managing and comparing
 
-Demo nie potrzebuje wpisywania na żywo, ale API jest w pełni sprawne.
-Kategorie: `food`, `water`, `meds`, `hygiene`, `other`.
+- **Add tab** — report a crate (category + location), a trip (from, to, detour budget, free
+  slots) or a need-point (name, urgency, demand per category). Invalid input (unknown
+  category, out-of-range coordinates, non-positive budget/slots) is rejected with `422`.
+- **Manage tab** — filter by name/id, then **Edit** or **Delete**. Only *available* crates and
+  trips can be changed or removed; a claimed/used resource returns `409`. Need-points can be
+  edited at any time, including their demand and status.
+- **Compare tab** — computes both scorers without changing the stored mode, and lists each
+  point's projected fill under each mode plus the difference.
+
+---
+
+## 10. API
+
+Categories: `food`, `water`, `meds`, `hygiene`, `other`. Interactive docs: `/docs`.
 
 ```bash
-# Skrzynka: kategoria + lokalizacja
-curl -X POST http://127.0.0.1:8000/crates \
-  -H 'Content-Type: application/json' \
+# Create
+curl -X POST http://127.0.0.1:8000/crates -H 'Content-Type: application/json' \
   -d '{"category":"food","lat":52.23,"lon":21.01}'
-
-# Przejazd: origin → destination, budżet objazdu (min), wolne sloty
-curl -X POST http://127.0.0.1:8000/trips \
-  -H 'Content-Type: application/json' \
+curl -X POST http://127.0.0.1:8000/trips -H 'Content-Type: application/json' \
   -d '{"olat":52.20,"olon":21.00,"dlat":52.27,"dlon":21.05,"detour_budget_min":10,"slots_free":3}'
+curl -X POST http://127.0.0.1:8000/need-points -H 'Content-Type: application/json' \
+  -d '{"name":"New point","lat":52.25,"lon":21.03,"severity":4,"requirements":{"water":3,"food":2}}'
 
-# Punkt potrzeb: pilność 1–5 + zapotrzebowanie per kategoria
-curl -X POST http://127.0.0.1:8000/need-points \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Nowy punkt","lat":52.25,"lon":21.03,"severity":4,"requirements":{"water":3,"food":2}}'
+# Edit / delete (only available crates and trips)
+curl -X PATCH http://127.0.0.1:8000/trips/t-to-rembertow -H 'Content-Type: application/json' -d '{"detour_budget_min":12}'
+curl -X PATCH http://127.0.0.1:8000/need-points/n-wola -H 'Content-Type: application/json' -d '{"severity":5,"requirements":{"meds":4}}'
+curl -X DELETE http://127.0.0.1:8000/crates/c01
 
-# Zmiana trybu / reset / podgląd stanu
+# State: normal, or preview another scorer
+curl http://127.0.0.1:8000/state
+curl 'http://127.0.0.1:8000/state?mode=nearest_fit'
+
+# Claim a suggestion, then run checkpoints
+curl -X POST http://127.0.0.1:8000/claim -H 'Content-Type: application/json' \
+  -d '{"detour_id":"detour-XXXXXXXX"}'
+curl -X POST http://127.0.0.1:8000/detours/detour-XXXXXXXX/pickup
+curl -X POST http://127.0.0.1:8000/detours/detour-XXXXXXXX/deliver
+
+# Mode / reset / config
 curl -X POST http://127.0.0.1:8000/mode -H 'Content-Type: application/json' -d '{"mode":"nearest_fit"}'
 curl -X POST http://127.0.0.1:8000/reset
-curl http://127.0.0.1:8000/state
+curl http://127.0.0.1:8000/config
+
+# Liveness probe (no database access)
+curl http://127.0.0.1:8000/health
 ```
 
-Interaktywna dokumentacja API: `http://127.0.0.1:8000/docs`.
-
-Po dodaniu danych odśwież stronę (albo wykonaj dowolny POST w panelu) — `GET /state`
-przelicza sugestie od nowa.
+After adding data, refresh the page (or perform any action in the panel) — `GET /state`
+recomputes the suggestions from scratch.
 
 ---
 
-## 10. Częste pytania i problemy
+## 11. FAQ and troubleshooting
 
-**Nie widzę żadnych sugestii.**
-Brak sugestii jest poprawny, gdy nie ma jednocześnie: dostępnych skrzynek, wolnych przejazdów
-i otwartych punktów potrzeb. Sprawdź, czy skrzynki mają potrzebną kategorię i leżą w korytarzu
-przejazdu (blisko łamanej `O → punkt → D`), oraz czy budżet objazdu wystarcza.
+**I don't see any suggestions.**
+No suggestions is correct when there is not at the same time: an available crate, a free trip,
+and an open need-point. Check that crates have a needed category and lie in the trip corridor
+(close to the `O → point → D` polyline), and that the detour budget is sufficient.
 
-**Klikam „Przejmij”, ale dostaję błąd.**
-Sugestie są efemeryczne — jeśli stan zmienił się między wygenerowaniem a kliknięciem
-(np. ktoś inny przejął zasoby albo kliknąłeś dwa razy), serwer zwróci konflikt.
-Odśwież i spróbuj ponownie; wygrywa pierwsze przejęcie.
+**My suggestion disappeared.**
+Suggestions have a limited validity (countdown on the card). When one expires, the system
+recomputes a fresh set on the next refresh — this is expected, and a new suggestion usually
+appears if resources are still available.
 
-**Zmieniłem tryb, ale metryka „stan” się nie zmieniła.**
-To normalne: „stan” to baza, a porównanie trybów widać w wartości **„po sugestiach”**
-oraz w samych sugestiach. Przejmij sugestię, żeby zmienić stan trwały.
+**I click "Claim" but get an error.**
+If the state changed between generation and your click (someone else claimed the resources, or
+you clicked twice, or the suggestion expired), the server returns a conflict. Refresh and try
+again; the first claim wins.
 
-**Po restarcie serwera dane wróciły do seeda.**
-Baza tworzy się/przygotowuje przy starcie; `POST /reset` (lub przycisk) też przywraca seed.
+**Can I undo a claim?**
+No. Once claimed, the crates are committed and the trip is used. You can still delete the
+*need-point* itself, which also removes its detours.
 
-**Chcę zacząć od zera.**
-Kliknij **Reset do seeda** w panelu albo `curl -X POST http://127.0.0.1:8000/reset`.
+**Why can't I edit/delete a crate or trip?**
+Only available ones can be changed. A crate that is claimed/picked up/delivered, or a used
+trip, is protected to keep in-flight detours consistent.
 
-**Zmienić port?**
-`PORT=9000 ./run.sh`. Bez auto-reloadu: `NO_RELOAD=1 ./run.sh`.
+**I switched mode but the "now" metric didn't change.**
+That is normal: "now" is the base state. The comparison shows up in "after suggestions", in
+the suggestions themselves, and in the Compare tab. Claim a suggestion to change the permanent
+state.
+
+**I want to start from scratch.**
+Click **Reset to seed** in the panel, or `curl -X POST http://127.0.0.1:8000/reset`.
+
+**Change the port?**
+`PORT=9000 ./run.sh`. Without auto-reload: `NO_RELOAD=1 ./run.sh`.

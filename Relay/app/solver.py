@@ -1,15 +1,14 @@
-"""Dwufazowy solver: kandydaci (korytarz) + zachłanny wybór (fairness).
+"""Two-phase solver: candidates (corridor) + greedy selection (fairness).
 
-Opis: ``docs/ALGORITHM.md``; decyzje: ADR 0002 (korytarz), 0003 (fairness),
-0005 (sugestie efemeryczne).
+Description: ``docs/ALGORITHM.md``; decisions: ADR 0002 (corridor), 0003 (fairness),
+0005 (ephemeral suggestions).
 """
 
 from __future__ import annotations
 
 import math
-from collections import defaultdict
 
-from .config import FAIR_SHARE, NEAREST_FIT, SPEED_KM_PER_MIN, EPS
+from .config import EPS, FAIR_SHARE, NEAREST_FIT, SPEED_KM_PER_MIN
 from .geometry import dist, polyline_dist
 
 
@@ -26,9 +25,9 @@ def build_candidate(
     crates: list[dict],
     delivered: dict[tuple[str, str], int],
 ) -> dict | None:
-    """Faza 1: dla pary (przejazd, punkt) zbuduj najlepszego kandydata.
+    """Phase 1: build the best candidate for a (trip, need-point) pair.
 
-    Zwraca ``None``, jeśli para jest niewykonalna (budżet / brak skrzynek).
+    Returns ``None`` if the pair is infeasible (budget / no crates).
     """
     o = (trip["olat"], trip["olon"])
     d = (trip["dlat"], trip["dlon"])
@@ -89,7 +88,7 @@ def build_candidate(
             if nearest_crate(cat) is None:
                 continue
             d0 = sim.get(cat, 0)
-            # Δ(c) = severity · [log(1+delivered_c+1) − log(1+delivered_c)]
+            # delta(c) = severity * [log(1+delivered_c+1) - log(1+delivered_c)]
             delta = severity * (math.log(1 + d0 + 1) - math.log(1 + d0))
             key = (-delta, cat)
             if best_key is None or key < best_key:
@@ -142,7 +141,7 @@ def _candidate_key(mode: str):
             c["trip_id"],
             c["need_id"],
         )
-    # fair_share (domyślnie)
+    # fair_share (default)
     return lambda c: (
         -c["utility_gain"],
         c["extra_minutes"],
@@ -158,7 +157,7 @@ def solve(
     delivered: dict[tuple[str, str], int],
     mode: str = FAIR_SHARE,
 ) -> list[dict]:
-    """Faza 2: zachłanny wybór wzajemnie rozłącznych sugestii."""
+    """Phase 2: greedy selection of mutually disjoint suggestions."""
     key = _candidate_key(mode)
 
     available_trips = [t for t in trips if t.get("status", "available") == "available"]
@@ -210,7 +209,7 @@ def solve(
 
 
 # ---------------------------------------------------------------------------
-# Metryki
+# Metrics
 # ---------------------------------------------------------------------------
 
 
@@ -255,10 +254,8 @@ def _scalar_metrics(
     return round(starve, 1), per_point
 
 
-def metrics(
-    need_points: list[dict], suggestions: list[dict]
-) -> dict:
-    """Starvation Index i zapełnienie per punkt (stan + projekcja sugestii)."""
+def metrics(need_points: list[dict], suggestions: list[dict]) -> dict:
+    """Starvation Index and fill per need-point (actual state + suggestion projection)."""
     actual: dict[tuple[str, str], int] = {}
     for n in need_points:
         for cat, r in n["requirements"].items():

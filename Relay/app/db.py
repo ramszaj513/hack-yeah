@@ -1,28 +1,31 @@
-"""Warstwa danych: schemat SQLite, seed scenariusza demo, transakcje i Lock.
+"""Data layer: SQLite schema, demo scenario seed, transactions and Lock.
 
-Schemat i model danych: ``docs/ARCHITECTURE.md``; przypadki: ``docs/ALGORITHM.md``.
+Schema and data model: ``docs/ARCHITECTURE.md``; cases: ``docs/ALGORITHM.md``.
+Post-MVP additions (persistent detours with TTL, checkpoints, CRUD) are documented
+in ``docs/adr/0006`` and ``docs/adr/0007``.
 """
 
 from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 import uuid
 from pathlib import Path
 
 from . import geometry as geo
-from .config import CATEGORIES, DB_PATH, DEFAULT_MODE
+from .config import DB_PATH, DEFAULT_MODE, SEED_VERSION
 
-# Jeden worker uvicorn + ten Lock wokół mutacji i przeliczeń = brak wyścigów.
+# One uvicorn worker + this Lock around mutations and solver runs = no races.
 lock = threading.Lock()
 
 
 class Conflict(Exception):
-    """Stan nie pozwala wykonać operacji (→ HTTP 409)."""
+    """The current state does not allow the operation (-> HTTP 409)."""
 
 
 class NotFound(Exception):
-    """Zasób nie istnieje (→ HTTP 404)."""
+    """The resource does not exist (-> HTTP 404)."""
 
 
 SCHEMA = """
@@ -62,11 +65,33 @@ CREATE TABLE IF NOT EXISTS settings(
   key TEXT PRIMARY KEY,
   value TEXT
 );
+
+-- Persistent detours: suggested (with TTL) -> claimed -> picked_up -> delivered.
+CREATE TABLE IF NOT EXISTS detours(
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL,
+  need_id TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  extra_minutes REAL NOT NULL DEFAULT 0,
+  utility_gain REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'suggested',
+  created_at REAL NOT NULL,
+  expires_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS detour_crates(
+  detour_id TEXT NOT NULL,
+  crate_id TEXT NOT NULL,
+  PRIMARY KEY(detour_id, crate_id)
+);
 """
+
+# Crate lifecycle: available -> claimed -> picked_up -> delivered.
+# Trip status: available -> used.
 
 
 def connect() -> sqlite3.Connection:
-    """Nowe połączenie do bazy z ``Row`` jako fabryką wierszy."""
+    """Open a new database connection with ``Row`` as the row factory."""
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -74,41 +99,41 @@ def connect() -> sqlite3.Connection:
 
 
 # ---------------------------------------------------------------------------
-# Seed scenariusza kontrastu
+# Contrast scenario seed
 # ---------------------------------------------------------------------------
 
 
 def _ll(dx_km: float, dy_km: float) -> tuple[float, float]:
-    """Skrót: przesunięcie km od środka mapy → ``(lat, lon)``."""
+    """Shorthand: offset in km from the map center -> ``(lat, lon)``."""
     return geo.latlon_offset(dx_km, dy_km)
 
 
-# Punkty potrzeb: (id, name, dx, dy, severity, {category: needed})
-# Cel: w trybie nearest_fit daleki punkt (severity=5) dostaje 0%,
-# a w fair_share zostaje obsłużony.
+# Need-points: (id, name, dx, dy, severity, {category: needed})
+# Goal: under nearest_fit the far point (severity=5) gets 0%,
+# while under fair_share it is served.
 _NEEDS = [
-    ("n-centrum", "Śródmieście", 0, 0, 2, {"food": 3}),
+    ("n-downtown", "City Center", 0, 0, 2, {"food": 3}),
     ("n-praga", "Praga", 7, 3, 1, {"water": 2}),
     ("n-wola", "Wola", -6, 4, 3, {"meds": 2}),
-    ("n-mokotow", "Mokotów", 3, -7, 2, {"food": 2, "hygiene": 1}),
-    ("n-bialoleka", "Białołęka", 5, 13, 4, {"water": 3, "food": 1}),
-    ("n-rembertow", "Rembertów-Wschód", 14, -14, 5, {"meds": 2, "water": 1}),
+    ("n-mokotow", "Mokotow", 3, -7, 2, {"food": 2, "hygiene": 1}),
+    ("n-bialoleka", "Bialoleka", 5, 13, 4, {"water": 3, "food": 1}),
+    ("n-rembertow-east", "Rembertow East", 14, -14, 5, {"meds": 2, "water": 1}),
 ]
 
-# Przejazdy: (id, (ox,oy), (dx,dy), detour_budget_min, slots_free)
-# Budżety zróżnicowane 5–15 min, trasy przecinają centrum.
-# t-na-rembertow prowadzi dokładnie przez (0,0) i ma duży budżet, więc jako
-# jedyny dosięga dalekiego punktu n-rembertow — to jest dźwignia kontrastu.
+# Trips: (id, (ox,oy), (dx,dy), detour_budget_min, slots_free)
+# Budgets vary from 5 to 15 min; routes cross the center.
+# t-to-rembertow runs exactly through (0,0) and has a large budget, so it is the
+# only trip that reaches the far n-rembertow-east point — the contrast lever.
 _TRIPS = [
-    ("t-centrum-wschod", (-16, -2), (16, 2), 6, 2),
-    ("t-polnoc-poludnie", (-4, 16), (4, -16), 5, 2),
-    ("t-zachod-wschod", (-16, 6), (16, -6), 8, 3),
-    ("t-poludniowy-wschod", (10, 16), (-10, -16), 7, 2),
-    ("t-na-rembertow", (-14, 14), (16, -8), 15, 3),
-    ("t-obwodnica", (-15, -10), (15, 10), 9, 3),
+    ("t-downtown-east", (-16, -2), (16, 2), 6, 2),
+    ("t-north-south", (-4, 16), (4, -16), 5, 2),
+    ("t-west-east", (-16, 6), (16, -6), 8, 3),
+    ("t-southeast", (10, 16), (-10, -16), 7, 2),
+    ("t-to-rembertow", (-14, 14), (16, -8), 15, 3),
+    ("t-ring-road", (-15, -10), (15, 10), 9, 3),
 ]
 
-# Skrzynki: (id, category, dx, dy)
+# Crates: (id, category, dx, dy)
 _CRATES = [
     ("c01", "food", -1, 1),
     ("c02", "food", 2, -2),
@@ -165,16 +190,28 @@ def _insert_seed(conn: sqlite3.Connection) -> None:
 
 
 def seed(conn: sqlite3.Connection) -> None:
-    """Czyści tabele i wstawia scenariusz demo (jedna transakcja)."""
+    """Clear the tables and insert the demo scenario (single transaction)."""
     conn.execute("BEGIN IMMEDIATE")
     try:
-        for table in ("requirements", "need_points", "trips", "crates", "settings"):
+        for table in (
+            "detour_crates",
+            "detours",
+            "requirements",
+            "need_points",
+            "trips",
+            "crates",
+            "settings",
+        ):
             conn.execute(f"DELETE FROM {table}")
         _insert_seed(conn)
         conn.execute(
             "INSERT INTO settings(key, value) VALUES('mode', ?)", (DEFAULT_MODE,)
         )
         conn.execute("INSERT INTO settings(key, value) VALUES('seeded', '1')")
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES('seed_version', ?)",
+            (SEED_VERSION,),
+        )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -182,26 +219,29 @@ def seed(conn: sqlite3.Connection) -> None:
 
 
 def reset(conn: sqlite3.Connection) -> None:
-    """``POST /reset`` — powrót do stanu seeda."""
+    """``POST /reset`` — restore the seed state."""
     seed(conn)
 
 
 def init() -> None:
-    """Tworzy schemat i seeduje, jeśli baza jest jeszcze niezaseedowana."""
+    """Create the schema and seed if the database is missing or on an old seed version."""
     conn = connect()
     try:
         conn.executescript(SCHEMA)
-        row = conn.execute(
+        seeded = conn.execute(
             "SELECT value FROM settings WHERE key = 'seeded'"
         ).fetchone()
-        if row is None:
+        version = conn.execute(
+            "SELECT value FROM settings WHERE key = 'seed_version'"
+        ).fetchone()
+        if seeded is None or version is None or version["value"] != SEED_VERSION:
             seed(conn)
     finally:
         conn.close()
 
 
 # ---------------------------------------------------------------------------
-# Odczyt
+# Read
 # ---------------------------------------------------------------------------
 
 
@@ -220,14 +260,17 @@ def set_mode(conn: sqlite3.Connection, mode: str) -> None:
 
 
 def load_state(conn: sqlite3.Connection) -> dict:
-    """Zwraca pełny stan z bazy w formie gotowej dla solvera i API."""
+    """Return the full database state in a form ready for the solver and API."""
     crates = [dict(r) for r in conn.execute("SELECT * FROM crates ORDER BY id")]
     trips = [dict(r) for r in conn.execute("SELECT * FROM trips ORDER BY id")]
     need_rows = [
         dict(r) for r in conn.execute("SELECT * FROM need_points ORDER BY id")
     ]
     req_rows = [
-        dict(r) for r in conn.execute("SELECT * FROM requirements ORDER BY need_id, category")
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM requirements ORDER BY need_id, category"
+        )
     ]
 
     reqs_by_need: dict[str, dict] = {}
@@ -252,7 +295,7 @@ def load_state(conn: sqlite3.Connection) -> dict:
 
 
 def delivered_map(need_points: list[dict]) -> dict[tuple[str, str], int]:
-    """Mapa ``(need_id, category) -> delivered`` dla solvera."""
+    """Map ``(need_id, category) -> delivered`` for the solver."""
     out: dict[tuple[str, str], int] = {}
     for n in need_points:
         for cat, r in n["requirements"].items():
@@ -261,7 +304,143 @@ def delivered_map(need_points: list[dict]) -> dict[tuple[str, str], int]:
 
 
 # ---------------------------------------------------------------------------
-# Zapis: tworzenie zasobów
+# Persistent detours
+# ---------------------------------------------------------------------------
+
+
+def _detour_crates(conn: sqlite3.Connection, detour_id: str) -> list[dict]:
+    return [
+        dict(r)
+        for r in conn.execute(
+            "SELECT dc.crate_id, c.category, c.lat, c.lon, c.status "
+            "FROM detour_crates dc JOIN crates c ON c.id = dc.crate_id "
+            "WHERE dc.detour_id = ? ORDER BY dc.crate_id",
+            (detour_id,),
+        )
+    ]
+
+
+def load_detours(conn: sqlite3.Connection) -> list[dict]:
+    """Return active detours (everything except expired suggestions)."""
+    rows = conn.execute(
+        "SELECT * FROM detours WHERE status != 'expired' ORDER BY created_at DESC"
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        crates = _detour_crates(conn, d["id"])
+        d["crate_ids"] = [c["crate_id"] for c in crates]
+        d["crates"] = crates
+        out.append(d)
+    return out
+
+
+def persist_suggestions(
+    conn: sqlite3.Connection, suggestions: list[dict], mode: str, ttl: float
+) -> list[tuple[str, float]]:
+    """Store the freshly computed suggestions as persistent, expiring detours.
+
+    Suggestions identical to an existing valid one keep their id and expiry, so the
+    countdown is stable across ``GET /state`` calls. Returns ``(detour_id, expires_at)``
+    aligned with the input list.
+    """
+    now = time.time()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute(
+            "UPDATE detours SET status='expired' "
+            "WHERE status='suggested' AND expires_at < ?",
+            (now,),
+        )
+        existing: dict[tuple, sqlite3.Row] = {}
+        for d in conn.execute(
+            "SELECT * FROM detours WHERE status='suggested'"
+        ).fetchall():
+            crates = frozenset(
+                r["crate_id"]
+                for r in conn.execute(
+                    "SELECT crate_id FROM detour_crates WHERE detour_id = ?",
+                    (d["id"],),
+                )
+            )
+            existing[(d["trip_id"], d["need_id"], crates)] = d
+
+        kept: set[str] = set()
+        result: list[tuple[str, float]] = []
+        for s in suggestions:
+            sig = (s["trip_id"], s["need_id"], frozenset(s["crate_ids"]))
+            row = existing.get(sig)
+            if row is not None and row["mode"] == mode:
+                kept.add(row["id"])
+                result.append((row["id"], row["expires_at"]))
+                continue
+            did = _gen_id("detour")
+            conn.execute(
+                "INSERT INTO detours(id, trip_id, need_id, mode, extra_minutes, "
+                "utility_gain, status, created_at, expires_at) "
+                "VALUES(?,?,?,?,?,?,'suggested',?,?)",
+                (
+                    did,
+                    s["trip_id"],
+                    s["need_id"],
+                    mode,
+                    float(s["extra_minutes"]),
+                    float(s["utility_gain"]),
+                    now,
+                    now + ttl,
+                ),
+            )
+            for cid in s["crate_ids"]:
+                conn.execute(
+                    "INSERT INTO detour_crates(detour_id, crate_id) VALUES(?,?)",
+                    (did, cid),
+                )
+            result.append((did, now + ttl))
+
+        for did in [d["id"] for d in existing.values() if d["id"] not in kept]:
+            conn.execute("DELETE FROM detour_crates WHERE detour_id = ?", (did,))
+            conn.execute("DELETE FROM detours WHERE id = ?", (did,))
+        conn.execute("DELETE FROM detours WHERE status='expired'")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return result
+
+
+def physical_counts(conn: sqlite3.Connection) -> dict:
+    """Physical progress of crates: in transit and delivered, globally and per need."""
+    in_transit = conn.execute(
+        "SELECT COUNT(*) AS n FROM crates WHERE status IN ('claimed','picked_up')"
+    ).fetchone()["n"]
+    delivered = conn.execute(
+        "SELECT COUNT(*) AS n FROM crates WHERE status = 'delivered'"
+    ).fetchone()["n"]
+    per_need = {
+        r["need_id"]: r["n"]
+        for r in conn.execute(
+            "SELECT d.need_id AS need_id, COUNT(*) AS n "
+            "FROM detour_crates dc JOIN detours d ON d.id = dc.detour_id "
+            "JOIN crates c ON c.id = dc.crate_id "
+            "WHERE c.status = 'delivered' GROUP BY d.need_id"
+        )
+    }
+    detour_counts = {
+        r["status"]: r["n"]
+        for r in conn.execute(
+            "SELECT status, COUNT(*) AS n FROM detours GROUP BY status"
+        )
+    }
+    return {
+        "in_transit": in_transit,
+        "delivered": delivered,
+        "per_need_delivered": per_need,
+        "detour_counts": detour_counts,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Write: creating resources
 # ---------------------------------------------------------------------------
 
 
@@ -275,7 +454,7 @@ def add_crate(
     cid = cid or _gen_id("crate")
     exists = conn.execute("SELECT 1 FROM crates WHERE id = ?", (cid,)).fetchone()
     if exists:
-        raise Conflict(f"Skrzynka o id={cid} już istnieje")
+        raise Conflict(f"A crate with id={cid} already exists")
     conn.execute(
         "INSERT INTO crates(id, category, lat, lon, status) VALUES(?,?,?,?,'available')",
         (cid, category, lat, lon),
@@ -297,7 +476,7 @@ def add_trip(
     tid = tid or _gen_id("trip")
     exists = conn.execute("SELECT 1 FROM trips WHERE id = ?", (tid,)).fetchone()
     if exists:
-        raise Conflict(f"Przejazd o id={tid} już istnieje")
+        raise Conflict(f"A trip with id={tid} already exists")
     conn.execute(
         "INSERT INTO trips(id, olat, olon, dlat, dlon, detour_budget_min, "
         "slots_free, status) VALUES(?,?,?,?,?,?,?,'available')",
@@ -321,9 +500,9 @@ def add_need(
         "SELECT 1 FROM need_points WHERE id = ?", (nid,)
     ).fetchone()
     if exists:
-        raise Conflict(f"Punkt potrzeb o id={nid} już istnieje")
+        raise Conflict(f"A need-point with id={nid} already exists")
 
-    # Przypadek 5: wszystkie ``needed == 0`` → punkt od razu zamknięty.
+    # Case 5: all ``needed == 0`` -> the point is closed immediately.
     total = sum(requirements.values())
     status = "closed" if total == 0 else "open"
 
@@ -348,43 +527,296 @@ def add_need(
 
 
 # ---------------------------------------------------------------------------
-# Zapisywanie objazdu (Claim) — atomowe, pierwszy wygrywa
+# Write: admin editing (PATCH / DELETE)
 # ---------------------------------------------------------------------------
 
 
+def update_crate(
+    conn: sqlite3.Connection,
+    cid: str,
+    category: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+) -> None:
+    row = conn.execute("SELECT * FROM crates WHERE id = ?", (cid,)).fetchone()
+    if row is None:
+        raise NotFound(f"There is no crate with id={cid}")
+    if row["status"] != "available":
+        raise Conflict("Only an available crate can be edited")
+    sets, params = [], []
+    if category is not None:
+        sets.append("category = ?")
+        params.append(category)
+    if lat is not None:
+        sets.append("lat = ?")
+        params.append(lat)
+    if lon is not None:
+        sets.append("lon = ?")
+        params.append(lon)
+    if not sets:
+        return
+    conn.execute(
+        f"UPDATE crates SET {', '.join(sets)} WHERE id = ?", (*params, cid)
+    )
+    conn.commit()
+
+
+def delete_crate(conn: sqlite3.Connection, cid: str) -> None:
+    row = conn.execute("SELECT * FROM crates WHERE id = ?", (cid,)).fetchone()
+    if row is None:
+        raise NotFound(f"There is no crate with id={cid}")
+    if row["status"] != "available":
+        raise Conflict("Only an available crate can be deleted")
+    # Drop stale suggested detours that referenced this crate.
+    for d in conn.execute(
+        "SELECT DISTINCT dc.detour_id AS did FROM detour_crates dc "
+        "JOIN detours d ON d.id = dc.detour_id "
+        "WHERE dc.crate_id = ? AND d.status = 'suggested'",
+        (cid,),
+    ).fetchall():
+        conn.execute("DELETE FROM detour_crates WHERE detour_id = ?", (d["did"],))
+        conn.execute("DELETE FROM detours WHERE id = ?", (d["did"],))
+    conn.execute("DELETE FROM crates WHERE id = ?", (cid,))
+    conn.commit()
+
+
+def update_trip(
+    conn: sqlite3.Connection,
+    tid: str,
+    olat: float | None = None,
+    olon: float | None = None,
+    dlat: float | None = None,
+    dlon: float | None = None,
+    detour_budget_min: float | None = None,
+    slots_free: int | None = None,
+) -> None:
+    row = conn.execute("SELECT * FROM trips WHERE id = ?", (tid,)).fetchone()
+    if row is None:
+        raise NotFound(f"There is no trip with id={tid}")
+    if row["status"] != "available":
+        raise Conflict("Only an available trip can be edited")
+    fields = [
+        ("olat", olat),
+        ("olon", olon),
+        ("dlat", dlat),
+        ("dlon", dlon),
+        ("detour_budget_min", detour_budget_min),
+        ("slots_free", slots_free),
+    ]
+    sets, params = [], []
+    for name, value in fields:
+        if value is not None:
+            sets.append(f"{name} = ?")
+            params.append(value)
+    if not sets:
+        return
+    conn.execute(
+        f"UPDATE trips SET {', '.join(sets)} WHERE id = ?", (*params, tid)
+    )
+    conn.commit()
+
+
+def delete_trip(conn: sqlite3.Connection, tid: str) -> None:
+    row = conn.execute("SELECT * FROM trips WHERE id = ?", (tid,)).fetchone()
+    if row is None:
+        raise NotFound(f"There is no trip with id={tid}")
+    if row["status"] != "available":
+        raise Conflict("Only an available trip can be deleted")
+    # Drop stale suggested detours that referenced this trip.
+    for d in conn.execute(
+        "SELECT id FROM detours WHERE trip_id = ? AND status = 'suggested'",
+        (tid,),
+    ).fetchall():
+        conn.execute("DELETE FROM detour_crates WHERE detour_id = ?", (d["id"],))
+        conn.execute("DELETE FROM detours WHERE id = ?", (d["id"],))
+    conn.execute("DELETE FROM trips WHERE id = ?", (tid,))
+    conn.commit()
+
+
+def update_need(
+    conn: sqlite3.Connection,
+    nid: str,
+    name: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    severity: int | None = None,
+    requirements: dict[str, int] | None = None,
+    status: str | None = None,
+) -> None:
+    row = conn.execute("SELECT * FROM need_points WHERE id = ?", (nid,)).fetchone()
+    if row is None:
+        raise NotFound(f"There is no need-point with id={nid}")
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        sets, params = [], []
+        for field, value in (
+            ("name", name),
+            ("lat", lat),
+            ("lon", lon),
+            ("severity", severity),
+        ):
+            if value is not None:
+                sets.append(f"{field} = ?")
+                params.append(value)
+        if sets:
+            conn.execute(
+                f"UPDATE need_points SET {', '.join(sets)} WHERE id = ?",
+                (*params, nid),
+            )
+
+        if requirements is not None:
+            existing = {
+                r["category"]: r
+                for r in conn.execute(
+                    "SELECT * FROM requirements WHERE need_id = ?", (nid,)
+                ).fetchall()
+            }
+            for cat, qty in requirements.items():
+                if cat in existing:
+                    delivered = min(existing[cat]["delivered"], qty)
+                    conn.execute(
+                        "UPDATE requirements SET needed = ?, delivered = ? "
+                        "WHERE need_id = ? AND category = ?",
+                        (qty, delivered, nid, cat),
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO requirements(need_id, category, needed, delivered) "
+                        "VALUES(?,?,?,0)",
+                        (nid, cat, qty),
+                    )
+            for cat in set(existing) - set(requirements):
+                conn.execute(
+                    "DELETE FROM requirements WHERE need_id = ? AND category = ?",
+                    (nid, cat),
+                )
+
+        if status is not None:
+            new_status = status
+        else:
+            rows = conn.execute(
+                "SELECT needed, delivered FROM requirements WHERE need_id = ?",
+                (nid,),
+            ).fetchall()
+            new_status = (
+                "closed"
+                if not rows or all(r["delivered"] >= r["needed"] for r in rows)
+                else "open"
+            )
+        conn.execute(
+            "UPDATE need_points SET status = ? WHERE id = ?", (new_status, nid)
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def delete_need(conn: sqlite3.Connection, nid: str) -> None:
+    row = conn.execute("SELECT * FROM need_points WHERE id = ?", (nid,)).fetchone()
+    if row is None:
+        raise NotFound(f"There is no need-point with id={nid}")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        detour_ids = [
+            r["id"]
+            for r in conn.execute(
+                "SELECT id FROM detours WHERE need_id = ?", (nid,)
+            ).fetchall()
+        ]
+        for did in detour_ids:
+            conn.execute("DELETE FROM detour_crates WHERE detour_id = ?", (did,))
+        conn.execute("DELETE FROM detours WHERE need_id = ?", (nid,))
+        conn.execute("DELETE FROM requirements WHERE need_id = ?", (nid,))
+        conn.execute("DELETE FROM need_points WHERE id = ?", (nid,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Detour lifecycle: claim -> pickup -> deliver
+# ---------------------------------------------------------------------------
+
+
+def _claim_target(
+    conn: sqlite3.Connection,
+    trip_id: str | None,
+    need_id: str | None,
+    crate_ids: list[str] | None,
+    detour_id: str | None,
+) -> tuple[str, str, list[str], str, float, float]:
+    """Resolve the claim target from either a detour id or explicit contents."""
+    if detour_id is not None:
+        d = conn.execute("SELECT * FROM detours WHERE id = ?", (detour_id,)).fetchone()
+        if d is None:
+            raise NotFound(f"There is no detour with id={detour_id}")
+        if d["status"] != "suggested":
+            raise Conflict("This detour has already been claimed")
+        if d["expires_at"] < time.time():
+            raise Conflict("This suggestion has expired")
+        ids = [
+            r["crate_id"]
+            for r in conn.execute(
+                "SELECT crate_id FROM detour_crates WHERE detour_id = ?",
+                (detour_id,),
+            ).fetchall()
+        ]
+        return (
+            d["trip_id"],
+            d["need_id"],
+            ids,
+            d["mode"],
+            d["extra_minutes"],
+            d["utility_gain"],
+        )
+    if not trip_id or not need_id or not crate_ids:
+        raise Conflict("Incomplete claim payload")
+    return trip_id, need_id, list(crate_ids), DEFAULT_MODE, 0.0, 0.0
+
+
 def claim(
-    conn: sqlite3.Connection, trip_id: str, need_id: str, crate_ids: list[str]
+    conn: sqlite3.Connection,
+    trip_id: str | None = None,
+    need_id: str | None = None,
+    crate_ids: list[str] | None = None,
+    detour_id: str | None = None,
 ) -> dict:
-    """Przejmuje sugerowany objazd. Rzuca ``Conflict``/``NotFound``."""
+    """Claim a suggested detour (by id or explicit contents). Raises Conflict/NotFound."""
+    trip_id, need_id, crate_ids, mode, extra, gain = _claim_target(
+        conn, trip_id, need_id, crate_ids, detour_id
+    )
+    now = time.time()
+
     trip = conn.execute("SELECT * FROM trips WHERE id = ?", (trip_id,)).fetchone()
     if trip is None:
-        raise NotFound(f"Nie ma przejazdu id={trip_id}")
+        raise NotFound(f"There is no trip with id={trip_id}")
     need = conn.execute(
         "SELECT * FROM need_points WHERE id = ?", (need_id,)
     ).fetchone()
     if need is None:
-        raise NotFound(f"Nie ma punktu potrzeb id={need_id}")
+        raise NotFound(f"There is no need-point with id={need_id}")
 
-    # Kandydat nieaktualny — nie ufamy danym klienta.
+    # Stale candidate — we do not trust client-provided data.
     if trip["status"] != "available":
-        raise Conflict("Przejazd został już użyty")
+        raise Conflict("The trip has already been used")
     if need["status"] != "open":
-        raise Conflict("Punkt potrzeb jest zamknięty")
+        raise Conflict("The need-point is closed")
     if not crate_ids:
-        raise Conflict("Trzeba przejąć co najmniej jedną skrzynkę")
+        raise Conflict("At least one crate must be claimed")
 
-    # Wczytaj skrzynki i sprawdź dostępność.
     placeholders = ",".join("?" for _ in crate_ids)
     rows = conn.execute(
         f"SELECT * FROM crates WHERE id IN ({placeholders})", crate_ids
     ).fetchall()
     if len(rows) != len(set(crate_ids)):
-        raise NotFound("Niektóre skrzynki nie istnieją")
+        raise NotFound("Some crates do not exist")
     for cr in rows:
         if cr["status"] != "available":
-            raise Conflict(f"Skrzynka {cr['id']} jest już przejęta")
+            raise Conflict(f"Crate {cr['id']} has already been claimed")
 
-    # Zlicz per kategoria i zweryfikuj zapotrzebowanie.
     counts: dict[str, int] = {}
     for cr in rows:
         counts[cr["category"]] = counts.get(cr["category"], 0) + 1
@@ -398,35 +830,48 @@ def claim(
     for cat, n in counts.items():
         req = reqs.get(cat)
         if req is None:
-            raise Conflict(f"Punkt potrzeb nie wymaga kategorii {cat}")
+            raise Conflict(f"The need-point does not require category {cat}")
         if n > max(0, req["needed"] - req["delivered"]):
-            raise Conflict(f"Zbyt dużo skrzynek kategorii {cat}")
+            raise Conflict(f"Too many crates of category {cat}")
 
-    # Atomowa transakcja: crates→claimed, trip→used, delivered += n.
+    new_detour_id = detour_id
     conn.execute("BEGIN IMMEDIATE")
     try:
         conn.execute(
             f"UPDATE crates SET status='claimed' WHERE id IN ({placeholders})",
             crate_ids,
         )
-        conn.execute(
-            "UPDATE trips SET status='used' WHERE id = ?", (trip_id,)
-        )
+        conn.execute("UPDATE trips SET status='used' WHERE id = ?", (trip_id,))
         for cat, n in counts.items():
             conn.execute(
                 "UPDATE requirements SET delivered = delivered + ? "
                 "WHERE need_id = ? AND category = ?",
                 (n, need_id, cat),
             )
+        if new_detour_id is not None:
+            conn.execute(
+                "UPDATE detours SET status='claimed' WHERE id = ?",
+                (new_detour_id,),
+            )
+        else:
+            new_detour_id = _gen_id("detour")
+            conn.execute(
+                "INSERT INTO detours(id, trip_id, need_id, mode, extra_minutes, "
+                "utility_gain, status, created_at, expires_at) "
+                "VALUES(?,?,?,?,?,?,'claimed',?,?)",
+                (new_detour_id, trip_id, need_id, mode, extra, gain, now, now),
+            )
+            for cid in crate_ids:
+                conn.execute(
+                    "INSERT INTO detour_crates(detour_id, crate_id) VALUES(?,?)",
+                    (new_detour_id, cid),
+                )
 
-        # Zamknij punkt, jeśli wszystko zaspokojone.
         remaining_rows = conn.execute(
             "SELECT needed, delivered FROM requirements WHERE need_id = ?",
             (need_id,),
         ).fetchall()
-        if all(
-            r["delivered"] >= r["needed"] for r in remaining_rows
-        ):
+        if all(r["delivered"] >= r["needed"] for r in remaining_rows):
             conn.execute(
                 "UPDATE need_points SET status='closed' WHERE id = ?", (need_id,)
             )
@@ -436,8 +881,41 @@ def claim(
         raise
 
     return {
+        "detour_id": new_detour_id,
+        "status": "claimed",
         "trip_id": trip_id,
         "need_id": need_id,
         "crate_ids": sorted(crate_ids),
         "delivered": counts,
     }
+
+
+def _transition(conn: sqlite3.Connection, detour_id: str, frm: set[str], to: str) -> dict:
+    d = conn.execute("SELECT * FROM detours WHERE id = ?", (detour_id,)).fetchone()
+    if d is None:
+        raise NotFound(f"There is no detour with id={detour_id}")
+    if d["status"] not in frm:
+        raise Conflict(f"Cannot move a detour from '{d['status']}' to '{to}'")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute(
+            f"UPDATE crates SET status=? WHERE id IN "
+            "(SELECT crate_id FROM detour_crates WHERE detour_id=?)",
+            (to, detour_id),
+        )
+        conn.execute("UPDATE detours SET status=? WHERE id=?", (to, detour_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return {"detour_id": detour_id, "status": to}
+
+
+def pickup_detour(conn: sqlite3.Connection, detour_id: str) -> dict:
+    """Checkpoint: the driver has picked up the crates."""
+    return _transition(conn, detour_id, {"claimed"}, "picked_up")
+
+
+def deliver_detour(conn: sqlite3.Connection, detour_id: str) -> dict:
+    """Checkpoint: the crates have been delivered."""
+    return _transition(conn, detour_id, {"claimed", "picked_up"}, "delivered")

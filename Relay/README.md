@@ -1,142 +1,157 @@
 # Relay
 
-**Sprawiedliwa pomoc na trasach, które i tak się dzieją.**
+**Fair aid on trips that happen anyway.**
 
-Relay to aplikacja na hackathon: logistyka pomocy humanitarnej w sytuacjach kryzysowych (powódź, trzęsienie ziemi, ewakuacja). Zamiast centralnego dyspozytora i „kolejnego Ubera” Relay wpasowuje dary w przejazdy, które mieszkańcy wykonują niezależnie, i rozdziela pomoc według **sprawiedliwości**, a nie odległości.
+Relay is a hackathon app for humanitarian aid logistics in crises (flood, earthquake, evacuation). Instead of a central dispatcher and "yet another Uber", Relay fits donations into trips that residents are already making, and distributes aid by **fairness**, not distance.
 
-> Dokumentacja projektowa i MVP. Plan implementacji: [`docs/PLAN.md`](docs/PLAN.md); architektura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); algorytm: [`docs/ALGORITHM.md`](docs/ALGORITHM.md).
+> Design docs and MVP. Implementation plan: [`docs/PLAN.md`](docs/PLAN.md); architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); algorithm: [`docs/ALGORITHM.md`](docs/ALGORITHM.md).
 
 ---
 
 ## Problem
 
-- Podczas kryzysu zasoby (jedzenie, woda, leki) są rozproszone po domach mieszkańców, a nie w jednym magazynie.
-- Służby mają **punkty potrzeb**, ale nie wiedzą, kto i kiedy może coś dowieźć.
-- Klasyczne rozwiązanie — centralny optymalizator dyspozycji — jest kosztowne, kruche i **niesprawiedliwe**: wysyła pomoc tam, gdzie jest najbliżej i najłatwiej, zostawiając dalekie oraz pilniejsze punkty bez wsparcia.
-- W kryzysie łączność i prąd bywają zerwane, więc rozwiązanie nie może opierać się na ciągłej łączności z chmurą.
+- During a crisis, resources (food, water, medicine) are scattered across residents' homes, not stored in a single warehouse.
+- Responders have **need-points**, but they do not know who can deliver what, or when.
+- The classic solution — a central dispatch optimizer — is expensive, brittle, and **unfair**: it sends aid wherever it is nearest and easiest, leaving distant and more urgent points without support.
+- In a crisis, connectivity and power are often down, so the solution cannot rely on constant cloud connectivity.
 
-## Rozwiązanie — trzy filary
+## Solution — three pillars
 
-1. **Skrzynka jako jednostka.** Dary standaryzujemy do pojedynczej skrzynki: jedna objętość, jedna kategoria. Darczyńca pakuje skrzynki, kierowca ma *N* wolnych miejsc (slotów). To rozwiązuje problem ładowności bez modelowania wagi i objętości.
-2. **Trasy zamiast zleceń.** Mieszkaniec nie dostaje „kursu” jak w Uberze — deklaruje przejazd, który **i tak wykonuje** (`origin → destination`, **budżet objazdu** w minutach, wolne sloty). System tylko dorzuca skrzynki po drodze.
-3. **Sprawiedliwość zamiast najkrótszej drogi.** Dopasowanie maksymalizuje **wklęsłą funkcję użyteczności** (proportional fairness), dzięki czemu żaden punkt — nawet daleki i pilny — nie zostaje pominięty kosztem najbliższego.
+1. **The crate as the unit.** We standardize donations into a single crate: one volume, one category. Donors pack crates, drivers have *N* free slots. This solves the capacity problem without modeling weight and volume.
+2. **Trips instead of jobs.** A resident does not get a "ride" like on Uber — they declare a trip they are **going to make anyway** (`origin → destination`, **detour budget** in minutes, free slots). The system only adds crates along the way.
+3. **Fairness instead of the shortest path.** Matching maximizes a **concave utility function** (proportional fairness), so no point — even a distant and urgent one — is skipped in favor of the nearest one.
 
-## Aktorzy
+## Actors
 
-| Aktor | Rola |
+| Actor | Role |
 |---|---|
-| **Mieszkaniec–Darczyńca** | Zgłasza skrzynki (kategoria + lokalizacja). |
-| **Mieszkaniec–Kierowca** | Zgłasza przejazd, który i tak wykonuje, wraz z budżetem objazdu i liczbą wolnych slotów. |
-| **Administrator / służby** | Tworzy punkty potrzeb z zapotrzebowaniem i wagą pilności (severity). |
+| **Resident–Donor** | Reports crates (category + location). |
+| **Resident–Driver** | Reports a trip they are making anyway, with a detour budget and a number of free slots. |
+| **Administrator / responders** | Creates need-points with demand and urgency weight (severity). |
 
-Ta sama osoba może być darczyńcą i kierowcą — nie ma osobnych kont.
+The same person can be both donor and driver — there are no separate accounts.
 
-## Jak to działa (przepływ)
+## How it works (flow)
 
-1. Mieszkańcy zgłaszają **skrzynki**, a kierowcy — **przejazdy**.
-2. Administrator tworzy **punkty potrzeb** z zapotrzebowaniem i pilnością.
-3. Po każdym zdarzeniu system przelicza **sugerowane objazdy**: wokół każdego przejazdu wyznacza korytarz (zależny od budżetu objazdu) i sprawdza, które skrzynki i punkty potrzeb da się wpasować.
-4. Kierowca widzi propozycję „weź te skrzynki i zrób +7 min, zawieź do punktu X”.
-5. Kierowca **przejmuje** (Claim) propozycję; skrzynki znikają z puli. Brak reakcji = brak rezerwacji, sugestia po prostu znika przy następnym przeliczeniu.
+1. Residents report **crates**, and drivers report **trips**.
+2. An administrator creates **need-points** with demand and urgency.
+3. After every event the system recomputes **suggested detours**: around each trip it draws a corridor (based on the detour budget) and checks which crates and need-points can be fitted in.
+4. The driver sees a proposal: "take these crates and add +7 min, deliver to point X".
+5. The driver **claims** the proposal; the crates leave the pool. No reaction = no reservation — the suggestion simply disappears on the next recomputation.
 
-## Model danych
+## Data model
 
-| Pojęcie | Opis |
+| Concept | Description |
 |---|---|
-| **Crate (skrzynka)** | Standardowa jednostka: jedna kategoria, jedna objętość, lokalizacja. |
-| **Trip (przejazd)** | `origin`, `destination`, `detour_budget_min`, `slots_free`. |
-| **Need-Point (punkt potrzeb)** | Lokalizacja, zapotrzebowanie per kategoria, `severity` (1–5). |
-| **Detour (objazd)** | Zestaw skrzynek zebranych wzdłuż korytarza przejazdu i dostarczonych do jednego punktu potrzeb. |
-| **Suggested Detour** | Efemeryczna propozycja objazdu przed przejęciem. |
-| **Starvation Index** | Metryka: ważony pilnością niedobór niezaspokojonego zapotrzebowania. |
+| **Crate** | The standard unit: one category, one volume, one location. |
+| **Trip** | `origin`, `destination`, `detour_budget_min`, `slots_free`. |
+| **Need-Point** | Location, demand per category, `severity` (1–5). |
+| **Detour** | A set of crates picked up along a trip corridor and delivered to one need-point. |
+| **Suggested Detour** | An ephemeral detour proposal before it is claimed. |
+| **Starvation Index** | Metric: urgency-weighted shortage of unmet demand. |
 
-## Algorytm
+## Algorithm
 
-**Faza 1 — wykonalność (corridor insertion).** Trasa objazdu to łamana `[O, N, D]`; korytarz wokół niej wynika z budżetu objazdu. Zbieramy skrzynki w korytarzu i odrzucamy pary przekraczające budżet. Złożoność `O(przejazdy × punkty × skrzynki)` — bez globalnej macierzy i bez VRP.
+**Phase 1 — feasibility (corridor insertion).** The detour route is the polyline `[O, N, D]`; the corridor around it follows from the detour budget. We collect crates in the corridor and reject pairs that exceed the budget. Complexity `O(trips × points × crates)` — no global matrix and no VRP.
 
-**Faza 2 — wybór (proportional fairness).** Maksymalizujemy:
+**Phase 2 — selection (proportional fairness).** We maximize:
 
 ```
 U = Σₙ severityₙ · Σ_c log(1 + deliveredₙ,c)
 ```
 
-Wklęsła użyteczność per kategoria sprawia, że każda kolejna skrzynka jest warta mniej, więc solver sam się rozkłada i nie może zagłodzić dalekiego punktu. Wybór jest zachłanny (marginal gain) i szybki. Szczegóły i pełny katalog przypadków: [`docs/ALGORITHM.md`](docs/ALGORITHM.md).
+The concave per-category utility means each additional crate is worth less, so the solver spreads itself out and cannot starve a distant point. Selection is greedy (marginal gain) and fast. Details and the full case catalog: [`docs/ALGORITHM.md`](docs/ALGORITHM.md).
 
-## Demo — serce prezentacji
+## Demo — the heart of the presentation
 
-Przełącznik między dwoma scorerami na tych samych danych:
+A switch between two scorers on the same data:
 
-- **Nearest-fit** (baseline „Uber”): minimalizacja objazdu → wszystko płynie do najbliższego punktu.
-- **Fair-share** (nasze): maksymalizacja wklęsłej użyteczności → rozkład + priorytet pilności.
+- **Nearest-fit** (the "Uber" baseline): minimize detour → everything flows to the nearest point.
+- **Fair-share** (ours): maximize concave utility → spread + urgency priority.
 
-Mapa + wykres zapełnienia punktów + **Starvation Index**. Wskazujemy punkt, który w trybie nearest-fit dostaje 0%, a w fair-share zostaje obsłużony — to 20 sekund, które wygrywają salę.
+A map + a chart of point fill levels + the **Starvation Index**. We point out a point that gets 0% under nearest-fit but is served under fair-share — those are the 20 seconds that win the room.
 
-## Zakres MVP
+## MVP scope
 
-| Budujemy | Odpuszczamy |
+| We build | We skip |
 |---|---|
-| Mapa Leaflet + OpenStreetMap (bez klucza API) | Prawdziwy routing / Distance Matrix |
-| Backend FastAPI + SQLite | Pełne globalne VRP |
-| Korytarz + zachłanny solver fairness | Okna czasowe i kolejność |
-| Seed syntetycznego miasta | Trwałe propozycje i re-plan |
-| Flow „zasugeruj → przejmij” | QR, logowanie, konta, płatności |
-| Panel fairness + Starvation Index | Model wagi/objętości (skrzynka = 1 slot) |
+| Leaflet + OpenStreetMap map (no API key) | Real routing / Distance Matrix |
+| FastAPI + SQLite backend | Full global VRP |
+| Corridor + greedy fairness solver | Time windows and ordering |
+| Synthetic city seed | Persistent proposals and re-planning |
+| "Suggest → claim" flow | QR, login, accounts, payments |
+| Fairness panel + Starvation Index | Weight/volume model (crate = 1 slot) |
 
-## Stos technologiczny
+## Post-MVP additions
+
+Implemented on top of the frozen MVP (see ADR 0006/0007):
+
+- **Persistent detours with TTL** — suggestions get a `detour_id` and a validity countdown.
+- **Checkpoints** — a claimed detour moves through `claimed → picked up → delivered`, with
+  physical progress counters.
+- **Mode preview** — `GET /state?mode=…` scores the same data with either algorithm without
+  changing the stored mode; the **Compare** tab shows Fair-share vs Nearest-fit side by side.
+- **Admin CRUD** — create, edit and delete crates, trips and need-points via the **Add** and
+  **Manage** tabs (and `POST`/`PATCH`/`DELETE` endpoints).
+- **Map filters** — toggle layers and filter crates by category / need-points by status.
+
+## Tech stack
 
 - **Backend:** FastAPI (Python) + SQLite.
-- **Solver:** czysty Python (bez zależności chmurowych).
-- **Frontend:** pojedyncza strona z mapą (Leaflet + OSM z CDN), bez build-stepu.
-- **Dane:** seed przy starcie. Demo nigdy nie zależy od danych wpisywanych na żywo.
+- **Solver:** pure Python (no cloud dependencies).
+- **Frontend:** a single page with a map (Leaflet + OSM from CDN), no build step.
+- **Data:** seed at startup. The demo never depends on data entered live.
 
-## Struktura repozytorium
+## Repository structure
 
 ```
 Relay/
-├─ app/                       # backend FastAPI + SQLite
-│  ├─ config.py               # R, LAT0, SPEED_KMH, DB_PATH, MODES, kategorie
-│  ├─ db.py                   # schemat, seed kontrastu, transakcje, Lock
+├─ app/                       # FastAPI + SQLite backend
+│  ├─ config.py               # R, LAT0, SPEED_KMH, DB_PATH, MODES, categories
+│  ├─ db.py                   # schema, contrast seed, transactions, Lock
 │  ├─ geometry.py             # xy(), dist(), seg_dist(), polyline_dist()
-│  ├─ solver.py               # faza 1 (korytarz) + faza 2 (greedy fairness)
-│  └─ main.py                 # endpointy API + montaż frontendu
-├─ web/                       # frontend: Leaflet z CDN, bez build-stepu
+│  ├─ solver.py               # phase 1 (corridor) + phase 2 (greedy fairness)
+│  └─ main.py                 # API endpoints + frontend mounting
+├─ web/                       # frontend: Leaflet from CDN, no build step
 │  ├─ index.html
 │  ├─ app.js
 │  └─ style.css
 ├─ tests/
-│  └─ test_smoke.py           # smoke test E2E (pytest)
-├─ pyproject.toml             # projekt uv (zależności + konfiguracja pytest)
-├─ requirements.txt           # to samo dla `pip` (opcjonalnie)
-├─ run.sh                     # uruchomienie całej aplikacji lokalnie
-├─ README.md                  # ten plik
+│  └─ test_smoke.py           # end-to-end smoke test (pytest)
+├─ pyproject.toml             # uv project (dependencies + pytest config)
+├─ requirements.txt           # the same for `pip` (optional)
+├─ run.sh                     # run the whole app locally
+├─ README.md                  # this file
 └─ docs/
-   ├─ PLAN.md                 # master-plan implementacji (2 h)
-   ├─ MANUAL.md               # instrukcja obsługi (jak używać aplikacji)
-   ├─ ARCHITECTURE.md         # komponenty, model danych, API, seed
-   ├─ ALGORITHM.md            # solver, metryki, katalog przypadków
-   ├─ IMPLEMENTATION.md       # kroki wdrożenia i smoke test
-   ├─ GLOSSARY.md             # język dziedziny
-   └─ adr/                    # decyzje projektowe
+   ├─ PLAN.md                 # master implementation plan (2 h)
+   ├─ MANUAL.md               # user manual (how to use the app)
+   ├─ ARCHITECTURE.md         # components, data model, API, seed
+   ├─ ALGORITHM.md            # solver, metrics, case catalog
+   ├─ IMPLEMENTATION.md       # implementation steps and smoke test
+   ├─ GLOSSARY.md             # domain language
+   └─ adr/                    # design decisions
 ```
 
-## Szybki start
+## Quick start
 
-Wymagany [`uv`](https://docs.astral.sh/uv/) (zarządza Pythonem i zależnościami).
+[`uv`](https://docs.astral.sh/uv/) is required (it manages Python and dependencies).
 
 ```bash
 cd Relay
 ./run.sh                        # uv sync + uvicorn (auto-reload)
-# przeglądarka: http://127.0.0.1:8000
+# browser: http://127.0.0.1:8000
 ```
 
-Opcje: `PORT=9000 ./run.sh`, `NO_RELOAD=1 ./run.sh`.
-Testy: `uv run pytest`. Reset danych: `POST /reset` lub przycisk w panelu.
+Options: `PORT=9000 ./run.sh`, `NO_RELOAD=1 ./run.sh`.
+Tests: `uv run pytest`. Reset data: `POST /reset` or the button in the panel.
 
-> **Jak używać aplikacji?** Zobacz [`docs/MANUAL.md`](docs/MANUAL.md) — albo kliknij **?**
-> w prawym górnym rogu panelu. Przy pierwszym wejściu instrukcja otworzy się sama.
+> **How do I use the app?** See [`docs/MANUAL.md`](docs/MANUAL.md) — or click **?**
+> in the top-right corner of the panel. On your first visit the guide opens by itself.
 
 ## Status
 
-Dokumentacja projektowa kompletna, MVP zaimplementowane wg [`docs/PLAN.md`](docs/PLAN.md).
-Backend FastAPI + SQLite, solver dwufazowy, frontend Leaflet, seed scenariusza kontrastu
-i smoke test E2E. Uzasadnienia decyzji: [`docs/adr/`](docs/adr/).
+Design docs complete, MVP implemented per [`docs/PLAN.md`](docs/PLAN.md), plus the
+post-MVP additions above (ADR 0006/0007). FastAPI + SQLite backend, two-phase solver,
+persistent detours with TTL and checkpoints, admin CRUD and map filters, a tabbed
+Leaflet frontend (Demo / Add / Manage / Compare), a contrast-scenario seed, and an
+end-to-end smoke test. Design rationale: [`docs/adr/`](docs/adr/).
