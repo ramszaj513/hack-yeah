@@ -54,6 +54,14 @@ Requirements:
   pages often predate the event and will describe the situation before it —
   treating those as current is how a true report of a recent event gets called
   false. Search news for the event, not just the organisation's website.
+- For a claim about the past, search the past. An organisation that still
+  exists today publishes pages about its present work, and those are not
+  evidence about what it did decades ago: a current defence-ministry policy
+  page says nothing about a wartime ministry report, and a recent government
+  statistic is not a wartime one. Go to archives, published histories, museum
+  and veterans' records, digitised documents and academic work on the period.
+  Put the era in the query — the war, the decade, the campaign — rather than
+  only the institution's name.
 - If the claim compares two things ("older than", "more than", "before"), search
   for EACH side separately and return sources for both. A source covering only
   one half leaves the comparison unanswerable.
@@ -84,6 +92,11 @@ class WebSearchSource:
             extras.append(f"Country: {context.country}")
         if context.timeframe:
             extras.append(f"Timeframe: {context.timeframe}")
+        if context.claimType == "historical":
+            extras.append(
+                "This is a historical claim. Sources must be about the period itself, "
+                "not about the same organisation or topic today."
+            )
 
         prompt = PROMPT.format(claim=context.claim, context="\n".join(extras))
 

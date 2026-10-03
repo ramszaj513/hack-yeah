@@ -41,6 +41,7 @@ class ClaimContext:
     claim: str
     country: str | None = None
     timeframe: str | None = None
+    claimType: str | None = None
 
 
 _WORD = re.compile(r"[a-z0-9]+")

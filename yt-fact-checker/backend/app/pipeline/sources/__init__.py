@@ -57,6 +57,7 @@ def _is_available(source: Source) -> bool:
 
 
 async def gather_evidence(context: ClaimContext, claim_type: ClaimType) -> Retrieval:
+    context.claimType = claim_type.value
     registry = _registry()
     names = ROUTES.get(claim_type, ROUTES[ClaimType.GENERAL])
     selected = [(name, registry[name]) for name in names if name in registry and _is_available(registry[name])]
