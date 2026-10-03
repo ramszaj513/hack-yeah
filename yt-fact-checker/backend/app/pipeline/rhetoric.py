@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+from app import cache
 from app.config import settings
 from app.models.schemas import Technique, TranscriptSegment, VideoMetadata
 from app.pipeline.extraction import chunk_segments, render_chunk
@@ -138,6 +139,13 @@ Transcript chunk:
 
 
 async def _review_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, limit: int) -> list[DetectedSignal]:
+    key = cache.key_for("rhetoric", render_chunk(chunk), video.title, limit,
+                        settings().openai_model)
+    cached = cache.get(key)
+    if cached is not None:
+        return [DetectedSignal(quote=i["quote"], technique=Technique(i["technique"]),
+                               severity=i["severity"], note=i["note"]) for i in cached]
+
     payload, _ = await structured_call(
         prompt=PROMPT.format(limit=limit, title=video.title or "(unknown)", chunk=render_chunk(chunk)),
         schema_name="rhetoric_signals",
@@ -160,6 +168,8 @@ async def _review_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, li
         found.append(
             DetectedSignal(quote=quote[:2000], technique=technique, severity=severity, note=note[:300])
         )
+    cache.put(key, [{"quote": i.quote, "technique": i.technique.value,
+                     "severity": i.severity, "note": i.note} for i in found])
     return found
 
 

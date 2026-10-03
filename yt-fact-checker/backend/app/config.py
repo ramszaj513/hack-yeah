@@ -44,6 +44,11 @@ class Settings:
     # model was observed returning different verdicts for the same claim on
     # identical evidence, which users see as the tool contradicting itself.
     temperature: float = 0.0
+    # Off by default: a cached verdict is a frozen one. See app/cache.py.
+    cache_enabled: bool = False
+    cache_path: str = ".cache/pipeline.sqlite3"
+    cache_ttl_seconds: int = 0
+
     evidence_per_claim: int = 9
     http_timeout_seconds: float = 20.0
 
@@ -72,6 +77,9 @@ def settings() -> Settings:
         enable_refutation_pass=_flag("ENABLE_REFUTATION_PASS", "true"),
         contact_email=os.getenv("CONTACT_EMAIL", "").strip(),
         temperature=float(os.getenv("OPENAI_TEMPERATURE", "0") or 0),
+        cache_enabled=_flag("CACHE_ENABLED", "false"),
+        cache_path=os.getenv("CACHE_PATH", ".cache/pipeline.sqlite3").strip(),
+        cache_ttl_seconds=_int("CACHE_TTL_HOURS", 72) * 3600,
     )
 
 

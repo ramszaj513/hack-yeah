@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from app import cache
 from app.config import settings
 from app.models.schemas import CheckRequest, CheckResponse
 from app.pipeline.orchestrator import run_pipeline
@@ -41,6 +42,18 @@ def load_demo_response() -> CheckResponse:
         "Demo fixture: these claims are canned sample output, not a live check of this video."
     ] + list(response.warnings)
     return response
+
+
+@app.get("/api/v1/cache")
+async def cache_stats() -> dict:
+    """What has been stored, by stage. Empty unless CACHE_ENABLED is on."""
+    return {"enabled": settings().cache_enabled, "entries": cache.stats()}
+
+
+@app.delete("/api/v1/cache")
+async def cache_clear() -> dict:
+    """Force the next check to be computed from scratch."""
+    return {"removed": cache.clear()}
 
 
 @app.get("/health")

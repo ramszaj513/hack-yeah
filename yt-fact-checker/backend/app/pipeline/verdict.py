@@ -8,6 +8,9 @@ step earns its cost on exactly the claims that matter most.
 
 from __future__ import annotations
 
+from app import cache
+from app.config import settings
+
 from dataclasses import dataclass
 
 from app.models.schemas import Evidence, UnverifiedReason, Verdict
@@ -344,6 +347,18 @@ async def adjudicate(
     model: str | None = None,
     refute: bool = True,
 ) -> Adjudication:
+    key = cache.key_for("verdict", context.claim, context.country, context.timeframe,
+                        [(d.url, d.snippet) for d in docs],
+                        model or settings().openai_model, refute)
+    cached = cache.get(key)
+    if cached is not None:
+        return Adjudication(
+            verdict=Verdict(cached["verdict"]), confidence=cached["confidence"],
+            basis=cached["basis"],
+            unverified_reason=UnverifiedReason(cached["reason"]) if cached["reason"] else None,
+            evidence=[Evidence(**e) for e in cached["evidence"]],
+        )
+
     prompt = VERDICT_PROMPT.format(
         claim=context.claim,
         context=_context_lines(context),
@@ -411,10 +426,18 @@ async def adjudicate(
             if revised == Verdict.COULDNT_VERIFY and reason is None:
                 reason = UnverifiedReason.EVIDENCE_NOT_SPECIFIC
 
-    return Adjudication(
+    adjudication = Adjudication(
         verdict=verdict,
         confidence=confidence,
         basis=basis[:700],
         unverified_reason=reason,
         evidence=evidence,
     )
+    cache.put(key, {
+        "verdict": adjudication.verdict.value,
+        "confidence": adjudication.confidence,
+        "basis": adjudication.basis,
+        "reason": adjudication.unverified_reason.value if adjudication.unverified_reason else None,
+        "evidence": [item.model_dump(mode="json") for item in adjudication.evidence],
+    })
+    return adjudication

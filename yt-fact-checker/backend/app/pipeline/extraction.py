@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import date
 import re
 
+from app import cache
 from app.config import settings
 from app.models.schemas import ClaimType, TranscriptSegment, VideoMetadata
 from app.pipeline.llm import LLMUnavailable, structured_call
@@ -181,6 +182,14 @@ def render_chunk(chunk: list[TranscriptSegment]) -> str:
 
 
 async def _extract_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, limit: int) -> list[ExtractedClaim]:
+    key = cache.key_for("extract", render_chunk(chunk), video.title, limit,
+                        date.today().isoformat(), settings().openai_model)
+    cached = cache.get(key)
+    if cached is not None:
+        return [ExtractedClaim(quote=i["quote"], claim=i["claim"],
+                               claim_type=ClaimType(i["claim_type"]),
+                               country=i["country"], timeframe=i["timeframe"]) for i in cached]
+
     prompt = PROMPT.format(
         limit=limit,
         title=video.title or "(unknown)",
@@ -216,6 +225,9 @@ async def _extract_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, l
                 timeframe=(item.get("timeframe") or "").strip() or None,
             )
         )
+
+    cache.put(key, [{"quote": i.quote, "claim": i.claim, "claim_type": i.claim_type.value,
+                     "country": i.country, "timeframe": i.timeframe} for i in results])
     return results
 
 

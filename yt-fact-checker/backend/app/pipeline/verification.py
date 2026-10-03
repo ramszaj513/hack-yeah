@@ -16,6 +16,7 @@ import asyncio
 import html
 import re
 
+from app import cache
 from app.models.schemas import Claim, Evidence, UnverifiedReason, Verdict
 from app.pipeline.anchoring import quote_appears_in
 from app.pipeline.sources.base import http_client
@@ -73,6 +74,12 @@ async def _verify_doc(doc) -> None:
     if not doc.snippet.strip():
         return
 
+    key = cache.key_for("verify", doc.url, doc.snippet)
+    cached = cache.get(key)
+    if cached is not None:
+        doc.snippetVerified = cached["verified"]
+        return
+
     try:
         async with http_client() as client:
             response = await client.get(doc.url, headers={"Accept": "text/html,application/xhtml+xml,*/*"})
@@ -86,6 +93,7 @@ async def _verify_doc(doc) -> None:
         return
 
     doc.snippetVerified = quote_appears_in(doc.snippet, text)
+    cache.put(key, {"verified": doc.snippetVerified})
 
 
 async def verify_retrieved(docs: list) -> list:

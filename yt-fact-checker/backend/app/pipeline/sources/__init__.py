@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+from app import cache
 from app.config import settings
 from app.models.schemas import SOURCE_TIER, ClaimType
 from app.pipeline.sources.academic import EuropePmcSource, OpenAlexSource, SemanticScholarSource
@@ -58,6 +59,18 @@ def _is_available(source: Source) -> bool:
 
 async def gather_evidence(context: ClaimContext, claim_type: ClaimType) -> Retrieval:
     context.claimType = claim_type.value
+    key = cache.key_for(
+        "evidence", context.claim, context.country, context.timeframe,
+        claim_type.value, settings().openai_model,
+    )
+    cached = cache.get(key)
+    if cached is not None:
+        return Retrieval(
+            docs=[RetrievedDoc(**doc) for doc in cached["docs"]],
+            attempted=cached["attempted"],
+            failed=cached["failed"],
+        )
+
     registry = _registry()
     names = ROUTES.get(claim_type, ROUTES[ClaimType.GENERAL])
     selected = [(name, registry[name]) for name in names if name in registry and _is_available(registry[name])]
@@ -79,15 +92,25 @@ async def gather_evidence(context: ClaimContext, claim_type: ClaimType) -> Retri
             failed.append(name)
             continue
         for doc in result:
-            key = doc.url.rstrip("/")
-            if key in seen:
+            # Not `key`: that name holds the cache key, and shadowing it here
+            # once stored every entry under a URL instead.
+            url = doc.url.rstrip("/")
+            if url in seen:
                 continue
-            seen.add(key)
+            seen.add(url)
             docs.append(doc)
 
     docs.sort(key=lambda doc: SOURCE_TIER.get(str(doc.sourceType), 9))
-    return Retrieval(
+    retrieval = Retrieval(
         docs=docs[: settings().evidence_per_claim],
         attempted=[name for name, _ in selected],
         failed=failed,
     )
+    # Caching a total provider failure would pin an outage in place.
+    if retrieval.docs:
+        cache.put(key, {
+            "docs": [vars(doc) for doc in retrieval.docs],
+            "attempted": retrieval.attempted,
+            "failed": retrieval.failed,
+        })
+    return retrieval
