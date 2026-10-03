@@ -39,6 +39,10 @@ class Settings:
     # in exchange for higher, friendlier rate limits.
     contact_email: str
 
+    # 0 makes repeated checks of the same video agree with each other. The
+    # model was observed returning different verdicts for the same claim on
+    # identical evidence, which users see as the tool contradicting itself.
+    temperature: float = 0.0
     evidence_per_claim: int = 9
     http_timeout_seconds: float = 20.0
 
@@ -65,6 +69,7 @@ def settings() -> Settings:
         enable_citation_verification=_flag("ENABLE_CITATION_VERIFICATION", "true"),
         enable_refutation_pass=_flag("ENABLE_REFUTATION_PASS", "true"),
         contact_email=os.getenv("CONTACT_EMAIL", "").strip(),
+        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0") or 0),
     )
 
 

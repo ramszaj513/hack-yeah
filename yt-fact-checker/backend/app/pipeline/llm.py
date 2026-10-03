@@ -109,6 +109,7 @@ async def structured_call(
     web_search: bool = False,
     max_output_tokens: int = 4096,
     cache_key: str | None = None,
+    temperature: float | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """Run one Responses call and return (parsed JSON, grounding URLs)."""
 
@@ -126,6 +127,9 @@ async def structured_call(
         },
         "max_output_tokens": max_output_tokens,
     }
+    chosen = config.temperature if temperature is None else temperature
+    if chosen is not None:
+        request["temperature"] = chosen
     if web_search:
         request["tools"] = [{"type": "web_search"}]
     if cache_key:
