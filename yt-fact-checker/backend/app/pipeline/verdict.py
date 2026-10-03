@@ -166,7 +166,11 @@ Rules:
   reactors" is not contradicted by a permit covering 24: the permit is a
   different fact. The same holds for targets, proposals and applications.
 - Mark a citation's stance as "contradicts" only when the source asserts
-  something incompatible with the claim. A source that simply does not mention
+  something incompatible with the claim. A source that supports a WEAKER
+  version of it is supporting, not contradicting: one calling abundant wine
+  "a sign" of the messianic age backs most of a claim that it is "the main
+  sign" and is silent on the rest, so its stance is "supports" or "context".
+  Reserve "contradicts" for a source that states the opposite. A source that simply does not mention
   the claim, or that says no documentary evidence survives, is not
   contradicting it — use "context". The stance is shown to the viewer as a
   badge, so calling silence a contradiction tells them a source disproves

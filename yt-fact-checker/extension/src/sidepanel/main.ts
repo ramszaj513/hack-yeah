@@ -16,7 +16,7 @@ const labels: Record<Verdict, string> = {
 const reasons: Record<UnverifiedReason, string> = {
   no_evidence_found: "No source addressing this was found — that is not evidence it is false.",
   sources_conflict: "Reliable sources disagree, so no verdict is reported.",
-  evidence_not_specific: "The sources found were about a different place, period or population.",
+  evidence_not_specific: "The sources found do not address this particular point.",
   citation_unverifiable: "The quoted passage could not be found on the cited pages.",
   provider_error: "An evidence provider failed, so this claim was not assessed.",
   claim_ambiguous: "The claim is too ambiguous to check as stated.",
