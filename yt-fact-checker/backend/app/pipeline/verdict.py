@@ -175,6 +175,10 @@ Rules:
   do not call the whole thing false. Say which part holds and return
   context_needed or couldnt_verify for the rest. "He visited Gdansk and Berlin"
   with Berlin confirmed and Gdansk merely undocumented is not a false claim.
+- Weigh an excerpt by its status line. One confirmed on its page outranks one
+  that was NOT FOUND there, whatever either says and whatever their publishers
+  are. Do not let excerpts that failed the check outvote a confirmed one; if
+  the only material against a claim failed the check, the claim is not refuted.
 - A record that is missing is not a record that refutes. Historical sources are
   incomplete by nature, and "there is no documentary evidence" means the
   question is open, not settled against the claim.
@@ -274,10 +278,20 @@ def render_evidence(docs: list[RetrievedDoc]) -> str:
         return "(no sources were retrieved)"
     blocks = []
     for index, doc in enumerate(docs):
+        verified = getattr(doc, "snippetVerified", None)
+        if verified is True:
+            status = "excerpt CONFIRMED present on the page"
+        elif verified is False:
+            status = "excerpt NOT FOUND on the page - treat as unreliable"
+        elif getattr(doc, "modelReported", False):
+            status = "excerpt unchecked (page could not be read)"
+        else:
+            status = "excerpt supplied directly by the source's own API"
         blocks.append(
             f"[{index}] {doc.title}\n"
             f"    publisher: {doc.publisher} ({doc.sourceType})\n"
             f"    url: {doc.url}\n"
+            f"    status: {status}\n"
             f"    excerpt: {doc.snippet or '(no excerpt available)'}"
         )
     return "\n\n".join(blocks)

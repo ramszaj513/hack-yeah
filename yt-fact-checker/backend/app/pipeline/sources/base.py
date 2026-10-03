@@ -18,6 +18,12 @@ class RetrievedDoc:
     sourceType: SourceType
     snippet: str = ""
 
+    # True when the excerpt is a quote the model says it read on the page,
+    # rather than text handed to us by a structured API. Only these can be
+    # invented, so only these are worth checking before we rely on them.
+    modelReported: bool = False
+    snippetVerified: bool | None = None
+
     def truncated(self, limit: int = 1200) -> "RetrievedDoc":
         return RetrievedDoc(
             title=self.title[:300],
@@ -25,6 +31,8 @@ class RetrievedDoc:
             url=self.url,
             sourceType=self.sourceType,
             snippet=" ".join(self.snippet.split())[:limit],
+            modelReported=self.modelReported,
+            snippetVerified=self.snippetVerified,
         )
 
 

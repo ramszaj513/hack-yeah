@@ -116,6 +116,7 @@ class WebSearchSource:
                     url=url,
                     sourceType=item.get("source_type") or "web",
                     snippet=item.get("quote") or "",
+                    modelReported=True,
                 ).truncated()
             )
         return docs

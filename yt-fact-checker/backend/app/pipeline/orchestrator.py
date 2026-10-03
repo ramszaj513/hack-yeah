@@ -31,7 +31,7 @@ from app.pipeline.llm import LLMUnavailable
 from app.pipeline.sources import Retrieval, gather_evidence
 from app.pipeline.sources.base import ClaimContext
 from app.pipeline.verdict import adjudicate
-from app.pipeline.verification import verify_citations
+from app.pipeline.verification import verify_citations, verify_retrieved
 
 
 Emit = Callable[[dict], Awaitable[None]]
@@ -93,6 +93,9 @@ async def _prepare(
     )
     async with semaphore:
         retrieval = await gather_evidence(context, extracted.claim_type)
+        # Check quotes before anything is decided on them, not after.
+        if settings().enable_citation_verification:
+            await verify_retrieved(retrieval.docs)
     return Prepared(extracted=extracted, anchor=anchor, context=context, retrieval=retrieval)
 
 

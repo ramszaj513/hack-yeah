@@ -68,6 +68,39 @@ async def _verify_one(evidence: Evidence) -> None:
     evidence.quoteVerified = quote_appears_in(evidence.snippet, text)
 
 
+async def _verify_doc(doc) -> None:
+    """Check a model-reported excerpt against the page it claims to come from."""
+    if not doc.snippet.strip():
+        return
+
+    try:
+        async with http_client() as client:
+            response = await client.get(doc.url, headers={"Accept": "text/html,application/xhtml+xml,*/*"})
+        if response.status_code >= 400:
+            return
+        text = html_to_text(response.text)
+    except Exception:
+        return
+
+    if len(text.split()) < MIN_READABLE_WORDS:
+        return
+
+    doc.snippetVerified = quote_appears_in(doc.snippet, text)
+
+
+async def verify_retrieved(docs: list) -> list:
+    """Confirm model-reported excerpts before anything is decided on them.
+
+    Running this after the verdict meant a quote that turned out not to be on
+    the page could still have outvoted one that was — which is exactly what
+    happened: two unverifiable excerpts overturned a verified one.
+    """
+    pending = [doc for doc in docs if getattr(doc, "modelReported", False)]
+    if pending:
+        await asyncio.gather(*(_verify_doc(doc) for doc in pending), return_exceptions=True)
+    return docs
+
+
 async def verify_citations(claim: Claim) -> Claim:
     """Check every cited quote, then downgrade the verdict if none survive."""
     if not claim.evidence:
