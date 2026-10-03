@@ -15,6 +15,7 @@ export type UnverifiedReason =
   | "claim_ambiguous";
 
 export type ClaimType =
+  | "definitional"
   | "statistical"
   | "scientific"
   | "historical"
@@ -111,7 +112,8 @@ export interface SessionState {
 }
 
 export type RuntimeMessage =
-  | { type: "CHECK_STARTED"; video: VideoMetadata; url: string; transcript?: TranscriptSegment[] }
+  | { type: "CHECK_STARTED"; video: VideoMetadata; url: string }
+  | { type: "TRANSCRIPT_READY"; video: VideoMetadata; url: string; transcript?: TranscriptSegment[] }
   | { type: "VIDEO_CHANGED"; video: VideoMetadata | null }
   | { type: "MARKER_CLICK"; claimId: string; startSeconds: number }
   | { type: "GET_STATE" }

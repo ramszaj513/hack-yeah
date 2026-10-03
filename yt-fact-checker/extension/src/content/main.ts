@@ -87,27 +87,41 @@ async function fetchTranscript(videoId: string): Promise<TranscriptSegment[] | n
   return segments.length > 0 ? segments : null;
 }
 
-async function startCheck(): Promise<void> {
+const TRANSCRIPT_TIMEOUT_MS = 10000;
+
+function startCheck(): void {
   const videoId = getVideoId();
   if (!videoId) return;
   setButtonState("Checking…", true);
 
-  // Captions are fetched here, in the viewer's own session, rather than on the
-  // backend: YouTube blocks most datacenter IPs, so a server-side fetch fails
-  // as soon as the backend runs anywhere but localhost.
-  let transcript: TranscriptSegment[] | undefined;
-  try {
-    transcript = (await fetchTranscript(videoId)) ?? undefined;
-  } catch {
-    transcript = undefined;
-  }
+  const video = getVideoMetadata(videoId);
+  const url = window.location.href;
 
-  send({
-    type: "CHECK_STARTED",
-    video: getVideoMetadata(videoId),
-    url: window.location.href,
-    transcript,
-  });
+  // Sent synchronously: chrome.sidePanel.open() is only permitted inside the
+  // user-gesture window, so anything awaited before this point silently loses
+  // the right to open the panel.
+  send({ type: "CHECK_STARTED", video, url });
+
+  // Captions are read here, in the viewer's own session, because YouTube
+  // blocks most datacenter IPs — a server-side fetch fails as soon as the
+  // backend runs anywhere but localhost. The backend still has its own
+  // fallback for when this comes back empty.
+  void (async () => {
+    let transcript: TranscriptSegment[] | undefined;
+    try {
+      transcript = (await withTimeout(fetchTranscript(videoId), TRANSCRIPT_TIMEOUT_MS)) ?? undefined;
+    } catch {
+      transcript = undefined;
+    }
+    send({ type: "TRANSCRIPT_READY", video, url, transcript });
+  })();
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
 }
 
 function setButtonState(label: string, disabled: boolean): void {
@@ -122,7 +136,7 @@ function injectCheckButton(): void {
   checkButton.className = "ytf-check-button";
   checkButton.type = "button";
   checkButton.textContent = "Check this video";
-  checkButton.addEventListener("click", () => void startCheck());
+  checkButton.addEventListener("click", () => startCheck());
   document.body.append(checkButton);
 }
 
@@ -177,7 +191,7 @@ function handleNavigation(): void {
 
 chrome.runtime.onMessage.addListener((message: any) => {
   if (message.type === "RENDER_MARKERS") renderMarkers(message.claims as Claim[]);
-  if (message.type === "START_CHECK") void startCheck();
+  if (message.type === "START_CHECK") startCheck();
   if (message.type === "SEEK_TO") {
     const video = document.querySelector<HTMLVideoElement>("video");
     if (video) video.currentTime = message.seconds;

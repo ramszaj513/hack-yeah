@@ -106,7 +106,7 @@ Verdicts: {verdicts}
 """
 
 
-REFUTATION_PROMPT = """Argue against this verdict as strongly as the evidence allows.
+REFUTATION_PROMPT = """Check this verdict for material defects.
 
 Claim: {claim}
 Proposed verdict: {verdict}
@@ -115,14 +115,24 @@ Stated basis: {basis}
 Evidence:
 {evidence}
 
-Decide whether the proposed verdict survives scrutiny. It should NOT survive if:
+The verdict STANDS by default. Overturn it only for a defect you can name that
+would change what a reader concludes:
 - the cited excerpts do not actually establish what the basis says they do;
-- the evidence concerns a different country, period, population or definition;
+- the evidence concerns a different country, period, population or definition
+  than the claim;
 - a definitive verdict rests on a single weak source;
 - contradicting evidence in the set was ignored.
 
-If it does not survive, choose the verdict the evidence genuinely supports —
-usually couldnt_verify or context_needed rather than the opposite verdict.
+Do NOT overturn a verdict because:
+- the claim uses loose or informal wording ("simple", "basically", "a lot of"),
+  as long as its substance is right;
+- the claim omits precision that does not change whether it is true;
+- the evidence states the fact in different words than the claim does;
+- you personally would have phrased the basis differently.
+
+A plainly correct claim backed by clear evidence must keep its verdict. Hedging
+a well-evidenced verdict into couldnt_verify is itself a failure: it tells the
+viewer nothing and hides a real answer behind false caution.
 """
 
 

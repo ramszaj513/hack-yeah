@@ -62,7 +62,7 @@ EXTRACTION_SCHEMA = {
                     },
                     "claim_type": {
                         "type": "string",
-                        "enum": ["statistical", "scientific", "historical", "political", "general"],
+                        "enum": ["definitional", "statistical", "scientific", "historical", "political", "general"],
                     },
                     "checkworthy": {
                         "type": "boolean",
@@ -83,16 +83,40 @@ Rules:
 - Copy `quote` VERBATIM from the transcript. Do not fix grammar, punctuation or
   capitalisation. It must appear character-for-character in the text below, or
   the claim will be discarded.
-- Write `claim` as a standalone sentence a stranger could check without having
-  watched the video: resolve pronouns ("they", "it"), vague references ("the
-  government", "this country") and relative times ("last year") using the video
-  title and surrounding transcript.
+- Write `claim` as a statement ABOUT THE WORLD that stands entirely on its own.
+  A researcher who has never seen this video must be able to check it using
+  public sources alone.
+- Resolve pronouns ("they", "it"), vague references ("the government", "this
+  country") and relative times ("last year") using the video title and
+  surrounding transcript. If the transcript is not in English, write the claim
+  in English.
+- The claim must NOT refer to the video, the transcript, the speaker, or the
+  order things were said in. Those are facts about a recording, not about the
+  world, and nothing can verify them.
+    BAD : "The video is about commutative rings."
+    BAD : "The first example given in the transcript is the integers."
+    BAD : "The speaker says vitamin D prevents colds."
+    GOOD: "The integers form a commutative ring."
+    GOOD: "Vitamin D supplementation prevents the common cold."
+  If a sentence carries a checkable fact wrapped in narration, extract the fact
+  and discard the narration.
 - Set `checkworthy` to false for opinions, predictions, jokes, sarcasm,
   rhetorical questions, personal anecdotes and value judgements. Extract them
   anyway with checkworthy=false rather than silently dropping them.
 - Do NOT invent claims that are not stated in this chunk.
 - Prefer specific, consequential, verifiable assertions over trivia.
 - Return at most {limit} claims for this chunk.
+
+Choosing `claim_type`:
+- definitional : mathematics, logic, or a definition true by established
+                 convention ("a field is a commutative ring"). Checked against
+                 reference works, not research papers.
+- scientific   : an empirical finding about the natural world, medicine or
+                 health, where the literature is the right authority.
+- statistical  : a number, rate or quantity about a population or economy.
+- historical   : something that happened at a particular time or place.
+- political    : a contested public claim about policy, law or public figures.
+- general      : anything else.
 
 Video title: {title}
 

@@ -32,6 +32,7 @@ class UnverifiedReason(str, Enum):
 
 
 class ClaimType(str, Enum):
+    DEFINITIONAL = "definitional"
     STATISTICAL = "statistical"
     SCIENTIFIC = "scientific"
     HISTORICAL = "historical"

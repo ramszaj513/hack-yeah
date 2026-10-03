@@ -28,6 +28,10 @@ class Retrieval:
 # Routing is what separates this from a generic search wrapper: a health claim
 # should reach the biomedical literature, not just whatever ranks well today.
 ROUTES: dict[ClaimType, tuple[str, ...]] = {
+    # Definitional and mathematical claims are settled by reference works.
+    # Research abstracts assume these facts rather than stating them, so
+    # routing them to the literature returns papers that never say the thing.
+    ClaimType.DEFINITIONAL: ("wikipedia", "web_search", "openalex"),
     ClaimType.SCIENTIFIC: ("europe_pmc", "openalex", "semantic_scholar", "web_search", "wikipedia"),
     ClaimType.STATISTICAL: ("web_search", "wikipedia", "google_fact_check"),
     ClaimType.HISTORICAL: ("wikipedia", "web_search", "openalex"),

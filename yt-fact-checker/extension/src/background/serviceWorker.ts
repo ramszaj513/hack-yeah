@@ -28,12 +28,36 @@ async function getState(): Promise<SessionState> {
   return (current.state as SessionState | undefined) ?? initialState;
 }
 
+function hasSidePanel(): boolean {
+  return typeof chrome.sidePanel?.open === "function";
+}
+
+/** Show the results UI.
+ *
+ * Chrome gets the side panel. Brave and other Chromium forks that do not
+ * implement chrome.sidePanel fall back to the same page in a tab — without
+ * this, the button appears to do nothing at all on those browsers.
+ */
 async function openSidePanel(tabId?: number): Promise<void> {
-  if (tabId === undefined) return;
+  if (hasSidePanel() && tabId !== undefined) {
+    try {
+      await chrome.sidePanel.open({ tabId });
+      return;
+    } catch (error) {
+      console.warn("[yt-fact-checker] side panel unavailable, falling back to a tab:", error);
+    }
+  }
+
+  const url = chrome.runtime.getURL("sidepanel.html");
   try {
-    await chrome.sidePanel.open({ tabId });
-  } catch {
-    // The panel can fail to open on a non-YouTube or restricted page.
+    const existing = await chrome.tabs.query({ url });
+    if (existing.length > 0 && existing[0].id !== undefined) {
+      await chrome.tabs.update(existing[0].id, { active: true });
+      return;
+    }
+    await chrome.tabs.create({ url, active: false });
+  } catch (error) {
+    console.warn("[yt-fact-checker] could not open the results view:", error);
   }
 }
 
@@ -147,7 +171,11 @@ async function checkVideo(
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.storage.session.set({ state: initialState });
-  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  // Guarded: on browsers without the Side Panel API this throws and takes the
+  // rest of the install handler down with it.
+  if (typeof chrome.sidePanel?.setPanelBehavior === "function") {
+    void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
+  }
 });
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
@@ -157,6 +185,8 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   }
 
   if (message.type === "CHECK_STARTED") {
+    // Opening the panel must happen while the user's click is still the
+    // active gesture, so this handler does nothing slow.
     void setState({
       video: message.video,
       status: "loading_transcript",
@@ -166,6 +196,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       error: undefined,
     });
     void openSidePanel(sender.tab?.id);
+    return false;
+  }
+
+  if (message.type === "TRANSCRIPT_READY") {
     void checkVideo(message.video, message.url, message.transcript, sender.tab?.id);
     return false;
   }

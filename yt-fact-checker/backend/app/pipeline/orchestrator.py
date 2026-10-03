@@ -86,9 +86,13 @@ async def _process_claim(
             return claim
 
         try:
+            # Adjudication and refutation run on the stronger model: extraction
+            # is a structural task, but deciding what the evidence actually
+            # establishes is where capability shows up in the output.
             result = await adjudicate(
                 context,
                 retrieval.docs,
+                model=settings().openai_reasoning_model,
                 refute=settings().enable_refutation_pass,
             )
         except LLMUnavailable as exc:
