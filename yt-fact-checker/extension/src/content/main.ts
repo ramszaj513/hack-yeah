@@ -39,12 +39,35 @@ function getVideoId(): string | null {
   return new URLSearchParams(window.location.search).get("v");
 }
 
+function findPublishDate(): string {
+  // YouTube puts an ISO date in the page's structured metadata. Without it the
+  // backend cannot tell what "on Friday" meant, and resolving it against today
+  // turns a correct claim about three weeks ago into a false one.
+  const meta = document.querySelector<HTMLMetaElement>('meta[itemprop="datePublished"]');
+  if (meta?.content) return meta.content;
+
+  const script = document.querySelector('script[type="application/ld+json"]');
+  if (script?.textContent) {
+    try {
+      const data = JSON.parse(script.textContent) as { uploadDate?: string; datePublished?: string };
+      const date = data.uploadDate ?? data.datePublished;
+      if (date) return date;
+    } catch {
+      // Malformed block; fall through to the player response.
+    }
+  }
+
+  const match = /"publishDate"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})/.exec(document.documentElement.innerHTML);
+  return match?.[1] ?? "";
+}
+
 function getVideoMetadata(videoId: string): VideoMetadata {
   return {
     id: videoId,
     title: document.querySelector("h1.ytd-watch-metadata")?.textContent?.trim() ?? "",
     description: document.querySelector("ytd-text-inline-expander")?.textContent?.trim() ?? "",
     language: "en",
+    publishedAt: findPublishDate(),
   };
 }
 

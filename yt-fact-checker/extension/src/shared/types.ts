@@ -92,6 +92,9 @@ export interface VideoMetadata {
   title: string;
   description: string;
   language: string;
+  /** ISO date the video was published. Relative times in the transcript are
+   *  relative to this, not to whenever someone runs the check. */
+  publishedAt: string;
 }
 
 export interface Evidence {

@@ -118,6 +118,18 @@ Rules:
   after exercise; dehydrated subjects are not euhydrated ones; a dose or
   formulation is not another one. Evidence from different conditions does not
   contradict the claim, it is simply about something else.
+- Check you are comparing the SAME measure before calling a number wrong. A
+  total outstanding is not an amount raised in one year; a stock is not a flow;
+  a flash estimate is not a final one; one index is not another with a similar
+  name. Oracle's total debt and the debt Oracle raised in a fiscal year are
+  different quantities, and one does not refute the other. If the evidence
+  measures something else, say so and return couldnt_verify.
+- A price, rate or yield is a snapshot. Evidence showing a different value on
+  an EARLIER date does not refute a claim about a later one — a mortgage rate
+  of 7.03% last month is consistent with 7.45% now. Unless an excerpt covers
+  the claim's own moment, return couldnt_verify rather than false, even when
+  the claim carries no date of its own: an undated claim in a recent video is
+  about the recent past, not about whenever your sources happen to stop.
 - Before calling a number wrong, convert units and check it is not the same
   quantity expressed differently. Sodium and salt differ by a factor of about
   2.54 — 3.27 g of sodium IS 8.3 g of salt. Grams against milligrams, per day

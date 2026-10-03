@@ -92,14 +92,15 @@ Rules:
   "this country") using the video title and surrounding transcript. If the
   transcript is not in English, write the claim in English.
 - Resolve relative times — "on Thursday", "four days ago", "last month",
-  "recently" — against the current date given below, not against any year you
-  associate with the subject matter. A video discussing current events is
-  almost always discussing them now.
-- Never invent a year. If the transcript does not establish when something
-  happened and today's date does not settle it, leave `timeframe` empty and
-  write the claim without a year. A wrong year is worse than no year: it makes
-  correct evidence look like it is about a different event, and the claim gets
-  reported as unverifiable.
+  "recently" — against the VIDEO'S publication date given below, never against
+  the day the check is being run and never against a year you associate with
+  the subject matter. A video published three weeks ago saying "on Friday"
+  means the Friday before IT was published.
+- If the publication date is unknown, do not resolve relative times at all.
+  Write the claim without a date and leave `timeframe` empty. A confidently
+  wrong date makes correct evidence look like it describes a different event,
+  and the claim is then reported as false when it is true.
+- Never invent a year. A wrong year is worse than no year.
 - The claim must NOT refer to the video, the transcript, the speaker, or the
   order things were said in. Those are facts about a recording, not about the
   world, and nothing can verify them.
@@ -138,7 +139,8 @@ Choosing `claim_type`:
 
 === Everything above is fixed. The material to process follows. ===
 
-Today's date: {today}
+Video published: {published}
+Today's date (for reference only — do NOT resolve the transcript against it): {today}
 Maximum claims for this chunk: {limit}
 Video title: {title}
 
@@ -183,7 +185,7 @@ def render_chunk(chunk: list[TranscriptSegment]) -> str:
 
 async def _extract_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, limit: int) -> list[ExtractedClaim]:
     key = cache.key_for("extract", render_chunk(chunk), video.title, limit,
-                        date.today().isoformat(), settings().openai_model)
+                        date.today().isoformat(), video.publishedAt, settings().openai_model)
     cached = cache.get(key)
     if cached is not None:
         return [ExtractedClaim(quote=i["quote"], claim=i["claim"],
@@ -194,6 +196,7 @@ async def _extract_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, l
         limit=limit,
         title=video.title or "(unknown)",
         today=date.today().isoformat(),
+        published=video.publishedAt or "unknown — do not resolve relative times",
         chunk=render_chunk(chunk),
     )
     payload, _ = await structured_call(

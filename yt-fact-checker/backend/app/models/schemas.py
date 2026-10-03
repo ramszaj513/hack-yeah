@@ -84,6 +84,10 @@ class VideoMetadata(BaseModel):
     title: str = Field(default="", max_length=500)
     description: str = Field(default="", max_length=10000)
     language: str = Field(default="en", min_length=2, max_length=12)
+    # When the video was published. Relative times in a transcript — "on
+    # Thursday", "four days ago" — are relative to THIS, not to the day someone
+    # happens to run the check.
+    publishedAt: str = Field(default="", max_length=32)
 
 
 class CheckRequest(BaseModel):
