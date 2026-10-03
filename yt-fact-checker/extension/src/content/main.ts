@@ -87,11 +87,27 @@ async function fetchTranscript(videoId: string): Promise<TranscriptSegment[] | n
   return segments.length > 0 ? segments : null;
 }
 
-function startCheck(): void {
+async function startCheck(): Promise<void> {
   const videoId = getVideoId();
   if (!videoId) return;
-  send({ type: "CHECK_STARTED", video: getVideoMetadata(videoId), url: window.location.href });
   setButtonState("Checking…", true);
+
+  // Captions are fetched here, in the viewer's own session, rather than on the
+  // backend: YouTube blocks most datacenter IPs, so a server-side fetch fails
+  // as soon as the backend runs anywhere but localhost.
+  let transcript: TranscriptSegment[] | undefined;
+  try {
+    transcript = (await fetchTranscript(videoId)) ?? undefined;
+  } catch {
+    transcript = undefined;
+  }
+
+  send({
+    type: "CHECK_STARTED",
+    video: getVideoMetadata(videoId),
+    url: window.location.href,
+    transcript,
+  });
 }
 
 function setButtonState(label: string, disabled: boolean): void {
@@ -106,7 +122,7 @@ function injectCheckButton(): void {
   checkButton.className = "ytf-check-button";
   checkButton.type = "button";
   checkButton.textContent = "Check this video";
-  checkButton.addEventListener("click", () => startCheck());
+  checkButton.addEventListener("click", () => void startCheck());
   document.body.append(checkButton);
 }
 
@@ -161,7 +177,7 @@ function handleNavigation(): void {
 
 chrome.runtime.onMessage.addListener((message: any) => {
   if (message.type === "RENDER_MARKERS") renderMarkers(message.claims as Claim[]);
-  if (message.type === "START_CHECK") startCheck();
+  if (message.type === "START_CHECK") void startCheck();
   if (message.type === "SEEK_TO") {
     const video = document.querySelector<HTMLVideoElement>("video");
     if (video) video.currentTime = message.seconds;

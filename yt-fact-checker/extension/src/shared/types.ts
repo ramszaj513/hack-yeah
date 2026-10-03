@@ -6,6 +6,29 @@ export type Verdict =
   | "context_needed"
   | "couldnt_verify";
 
+export type UnverifiedReason =
+  | "no_evidence_found"
+  | "sources_conflict"
+  | "evidence_not_specific"
+  | "citation_unverifiable"
+  | "provider_error"
+  | "claim_ambiguous";
+
+export type ClaimType =
+  | "statistical"
+  | "scientific"
+  | "historical"
+  | "political"
+  | "general";
+
+export type SourceType =
+  | "primary"
+  | "academic"
+  | "fact_checker"
+  | "journalism"
+  | "reference"
+  | "web";
+
 export type AnalysisStatus =
   | "ready"
   | "loading_transcript"
@@ -35,15 +58,25 @@ export interface Evidence {
   title: string;
   publisher: string;
   url: string;
-  sourceType: "primary" | "fact_checker" | "journalism" | "reference";
+  sourceType: SourceType;
+  /** Span the model attributed to this source. */
+  snippet: string;
+  /** true = quote found on the page, false = fetched but absent, null = could not fetch. */
+  quoteVerified: boolean | null;
+  supports: "supports" | "contradicts" | "context";
 }
 
 export interface Claim {
   id: string;
   text: string;
+  /** Verbatim transcript span the claim came from. */
+  quote: string;
   startSeconds: number;
   endSeconds: number;
   verdict: Verdict;
+  claimType: ClaimType;
+  unverifiedReason: UnverifiedReason | null;
+  confidence: number;
   basis: string;
   evidence: Evidence[];
   context: {
@@ -60,6 +93,13 @@ export interface AnalysisResponse {
   warnings: string[];
 }
 
+/** Server-sent events emitted by /api/v1/check/stream. */
+export type StreamEvent =
+  | { type: "status"; status: AnalysisStatus }
+  | { type: "claim"; claim: Claim }
+  | { type: "complete"; response: AnalysisResponse }
+  | { type: "error"; message: string };
+
 export interface SessionState {
   video?: VideoMetadata;
   status: AnalysisStatus;
@@ -71,7 +111,7 @@ export interface SessionState {
 }
 
 export type RuntimeMessage =
-  | { type: "CHECK_STARTED"; video: VideoMetadata; url: string }
+  | { type: "CHECK_STARTED"; video: VideoMetadata; url: string; transcript?: TranscriptSegment[] }
   | { type: "VIDEO_CHANGED"; video: VideoMetadata | null }
   | { type: "MARKER_CLICK"; claimId: string; startSeconds: number }
   | { type: "GET_STATE" }

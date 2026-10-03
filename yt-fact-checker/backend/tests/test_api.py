@@ -12,11 +12,16 @@ client = TestClient(app)
 def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
 
 
-def test_missing_transcript_is_fetched_or_rejected(monkeypatch) -> None:
-    monkeypatch.setattr("app.main.fetch_english_transcript", lambda video_id: (_ for _ in ()).throw(__import__("app.pipeline.transcript", fromlist=["TranscriptUnavailable"]).TranscriptUnavailable("missing")))
+def test_missing_transcript_is_rejected_cleanly(monkeypatch) -> None:
+    from app.pipeline.transcript import TranscriptUnavailable
+
+    def unavailable(video_id: str):
+        raise TranscriptUnavailable("missing")
+
+    monkeypatch.setattr("app.main.fetch_english_transcript", unavailable)
     response = client.post(
         "/api/v1/check",
         json={"video": {"id": "abc123", "language": "en"}, "url": "https://www.youtube.com/watch?v=abc123"},
@@ -26,24 +31,47 @@ def test_missing_transcript_is_fetched_or_rejected(monkeypatch) -> None:
     assert "Speech-to-text is not used" in response.json()["warnings"][0]
 
 
-def test_demo_response_contains_evidence_and_concerning_claims(monkeypatch) -> None:
+def test_demo_mode_is_labelled_as_a_fixture(monkeypatch) -> None:
     monkeypatch.setenv("DEMO_MODE", "true")
     from app.config import settings
 
     settings.cache_clear()
-    response = client.post(
-        "/api/v1/check",
-        json={
-            "video": {"id": "abc123", "title": "Demo", "language": "en"},
-            "transcript": [{"text": "The Constitution was signed in 1791.", "start": 1, "duration": 3}],
-        },
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "complete"
-    assert any(claim["verdict"] == "false" for claim in payload["claims"])
-    assert all(claim["evidence"] for claim in payload["claims"])
+    try:
+        response = client.post(
+            "/api/v1/check",
+            json={
+                "video": {"id": "abc123", "title": "Demo", "language": "en"},
+                "transcript": [{"text": "The Constitution was signed in 1791.", "start": 1, "duration": 3}],
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "complete"
+        assert payload["mode"] == "demo"
+        # A fixture must never be mistaken for a real check of this video.
+        assert "fixture" in payload["warnings"][0].lower()
+    finally:
+        settings.cache_clear()
+
+
+def test_missing_model_key_does_not_pretend_to_check(monkeypatch) -> None:
+    monkeypatch.setenv("DEMO_MODE", "false")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    from app.config import settings
+
     settings.cache_clear()
+    try:
+        response = client.post(
+            "/api/v1/check",
+            json={
+                "video": {"id": "abc123", "title": "Demo", "language": "en"},
+                "transcript": [{"text": "Something factual was said here.", "start": 1, "duration": 3}],
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "failed"
+    finally:
+        settings.cache_clear()
 
 
 def test_fixture_has_valid_json() -> None:

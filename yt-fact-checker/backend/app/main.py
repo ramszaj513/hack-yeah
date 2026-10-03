@@ -1,62 +1,139 @@
+import asyncio
 import json
 from pathlib import Path
+from typing import AsyncIterator
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from app.config import settings
 from app.models.schemas import CheckRequest, CheckResponse
-from app.pipeline.analysis import analyze_live
-from app.pipeline.evidence import configured_provider
+from app.pipeline.orchestrator import run_pipeline
 from app.pipeline.transcript import TranscriptUnavailable, fetch_english_transcript
 
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = ROOT / "fixtures" / "demo-results.json"
 
-app = FastAPI(title="yt-fact-checker API", version="0.1.0")
+app = FastAPI(title="yt-fact-checker API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings()["frontend_origins"],
+    allow_origins=settings().frontend_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 
+NO_TRANSCRIPT = (
+    "This video cannot be checked because no usable English transcript is available. "
+    "Speech-to-text is not used."
+)
+
+
 def load_demo_response() -> CheckResponse:
     with FIXTURE_PATH.open(encoding="utf-8") as fixture:
-        return CheckResponse.model_validate(json.load(fixture))
+        response = CheckResponse.model_validate(json.load(fixture))
+    response.mode = "demo"
+    response.warnings = [
+        "Demo fixture: these claims are canned sample output, not a live check of this video."
+    ] + list(response.warnings)
+    return response
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    config = settings()
+    return {
+        "status": "ok",
+        "mode": "demo" if config.demo_mode else "live",
+        "model_configured": "yes" if config.llm_enabled else "no",
+    }
 
 
-NO_TRANSCRIPT = "This video cannot be checked because no usable English transcript is available. Speech-to-text is not used."
+def _ensure_transcript(request: CheckRequest) -> CheckResponse | None:
+    """Fill in the transcript server-side when the extension didn't supply one."""
+    if request.transcript:
+        return None
+    try:
+        request.transcript = fetch_english_transcript(request.video.id)
+    except TranscriptUnavailable:
+        return CheckResponse(
+            analysisId=str(uuid4()),
+            status="no_transcript",
+            mode="live",
+            warnings=[NO_TRANSCRIPT],
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not fetch the YouTube transcript.") from exc
+    return None
 
 
 @app.post("/api/v1/check", response_model=CheckResponse)
 async def check_video(request: CheckRequest) -> CheckResponse:
-    if not request.transcript:
-        try:
-            request.transcript = fetch_english_transcript(request.video.id)
-        except TranscriptUnavailable:
-            return CheckResponse(
-                analysisId=str(uuid4()),
-                status="no_transcript",
-                mode="live",
-                warnings=[NO_TRANSCRIPT],
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail="Could not fetch the YouTube transcript.") from exc
+    early = _ensure_transcript(request)
+    if early is not None:
+        return early
 
-    if settings()["demo_mode"]:
+    if settings().demo_mode:
         return load_demo_response()
 
     try:
-        return await analyze_live(request, configured_provider())
+        return await run_pipeline(request)
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Fact-checking service failed before producing a result.") from exc
+        raise HTTPException(status_code=502, detail="Fact-checking failed before producing a result.") from exc
+
+
+@app.post("/api/v1/check/stream")
+async def check_video_stream(request: CheckRequest) -> StreamingResponse:
+    """Server-sent events: status changes and claims as each one is decided.
+
+    The full pipeline takes long enough that a single blocking response would
+    look frozen, so results are pushed to the panel as they resolve.
+    """
+
+    async def events() -> AsyncIterator[str]:
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+        async def emit(event: dict) -> None:
+            await queue.put(event)
+
+        async def run() -> None:
+            try:
+                early = _ensure_transcript(request)
+                if early is not None:
+                    await queue.put({"type": "complete", "response": early.model_dump(mode="json")})
+                    return
+
+                if settings().demo_mode:
+                    await queue.put(
+                        {"type": "complete", "response": load_demo_response().model_dump(mode="json")}
+                    )
+                    return
+
+                response = await run_pipeline(request, emit)
+                await queue.put({"type": "complete", "response": response.model_dump(mode="json")})
+            except Exception as exc:
+                await queue.put({"type": "error", "message": str(exc)})
+            finally:
+                await queue.put(None)
+
+        worker = asyncio.create_task(run())
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        finally:
+            worker.cancel()
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

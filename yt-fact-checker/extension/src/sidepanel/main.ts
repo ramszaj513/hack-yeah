@@ -1,4 +1,4 @@
-import type { Claim, RuntimeMessage, SessionState, Verdict } from "../shared/types";
+import type { Claim, Evidence, RuntimeMessage, SessionState, UnverifiedReason, Verdict } from "../shared/types";
 
 const app = document.querySelector<HTMLElement>("#app")!;
 const order: Verdict[] = ["false", "potentially_false", "misleading", "supported", "context_needed", "couldnt_verify"];
@@ -9,6 +9,17 @@ const labels: Record<Verdict, string> = {
   supported: "Supported",
   context_needed: "Context needed",
   couldnt_verify: "Couldn’t verify",
+};
+
+/** Why a claim went unresolved. These are very different situations and
+ *  collapsing them into one label would overstate what we actually know. */
+const reasons: Record<UnverifiedReason, string> = {
+  no_evidence_found: "No source addressing this was found — that is not evidence it is false.",
+  sources_conflict: "Reliable sources disagree, so no verdict is reported.",
+  evidence_not_specific: "The sources found were about a different place, period or population.",
+  citation_unverifiable: "The quoted passage could not be found on the cited pages.",
+  provider_error: "An evidence provider failed, so this claim was not assessed.",
+  claim_ambiguous: "The claim is too ambiguous to check as stated.",
 };
 
 let state: SessionState = { status: "ready", claims: [], warnings: [] };
@@ -48,21 +59,61 @@ function renderClaim(claim: Claim): HTMLElement {
   article.append(head);
 
   article.append(textElement("p", claim.text, "claim-text"));
+
+  if (claim.quote && claim.quote.trim()) {
+    article.append(textElement("p", `“${claim.quote}”`, "said"));
+  }
+
   article.append(textElement("p", claim.basis, "basis"));
+
+  if (claim.unverifiedReason) {
+    article.append(textElement("p", reasons[claim.unverifiedReason], "warning"));
+  }
 
   const sources = document.createElement("div");
   sources.className = "evidence";
-  for (const evidence of claim.evidence) {
-    const link = document.createElement("a");
-    link.href = evidence.url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = `${evidence.title} · ${evidence.publisher}`;
-    sources.append(link);
-  }
+  for (const evidence of claim.evidence) sources.append(renderEvidence(evidence));
+
   if (claim.evidence.length > 0) article.append(sources);
   else article.append(textElement("p", "No reliable evidence link was found.", "basis"));
   return article;
+}
+
+function renderEvidence(evidence: Evidence): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "evidence-row";
+
+  const link = document.createElement("a");
+  link.href = evidence.url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = `${evidence.title} · ${evidence.publisher}`;
+  row.append(link);
+
+  const meta = document.createElement("div");
+  meta.className = "evidence-meta";
+  meta.append(textElement("span", evidence.sourceType.replace("_", " "), `tag tag-${evidence.sourceType}`));
+
+  if (evidence.supports === "contradicts") {
+    meta.append(textElement("span", "contradicts claim", "tag tag-contradicts"));
+  }
+
+  // Whether we could confirm the quoted passage is actually on the page. This
+  // is a mechanical check, not a judgement about the source's reliability.
+  if (evidence.quoteVerified === true) {
+    meta.append(textElement("span", "quote verified", "tag tag-verified"));
+  } else if (evidence.quoteVerified === false) {
+    meta.append(textElement("span", "quote not found on page", "tag tag-unverified"));
+  } else {
+    meta.append(textElement("span", "page unreachable", "tag tag-unknown"));
+  }
+
+  row.append(meta);
+
+  if (evidence.snippet && evidence.snippet.trim()) {
+    row.append(textElement("p", `“${evidence.snippet}”`, "evidence-quote"));
+  }
+  return row;
 }
 
 function render(): void {

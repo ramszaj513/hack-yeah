@@ -1,0 +1,219 @@
+"""LLM claim extraction.
+
+Replaces the regex extractor, which split sentences on ``[.!?]`` and therefore
+collapsed into a single unusable blob on auto-generated captions — the most
+common caption type on YouTube, and one that frequently carries no punctuation
+at all.
+
+Two properties make the rest of the pipeline trustworthy:
+
+* every claim carries the **verbatim transcript quote** it came from, so the
+  timestamp can be derived deterministically and an invented claim can be
+  detected and dropped;
+* every claim is **decontextualised** into a standalone sentence, because
+  "they spent 40 billion on it last year" cannot be searched for as written.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+import re
+
+from app.config import settings
+from app.models.schemas import ClaimType, TranscriptSegment, VideoMetadata
+from app.pipeline.llm import LLMUnavailable, structured_call
+
+
+CHUNK_SECONDS = 420.0
+CHUNK_MAX_CHARS = 9000
+
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+@dataclass
+class ExtractedClaim:
+    quote: str
+    claim: str
+    claim_type: ClaimType
+    country: str | None
+    timeframe: str | None
+
+
+EXTRACTION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["claims"],
+    "properties": {
+        "claims": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["quote", "claim", "claim_type", "checkworthy", "country", "timeframe"],
+                "properties": {
+                    "quote": {
+                        "type": "string",
+                        "description": "Verbatim span copied from the transcript, 4-40 words.",
+                    },
+                    "claim": {
+                        "type": "string",
+                        "description": "Standalone, checkable restatement with pronouns and vague references resolved.",
+                    },
+                    "claim_type": {
+                        "type": "string",
+                        "enum": ["statistical", "scientific", "historical", "political", "general"],
+                    },
+                    "checkworthy": {
+                        "type": "boolean",
+                        "description": "False for opinion, prediction, rhetoric, satire or personal experience.",
+                    },
+                    "country": {"type": "string", "description": "Country the claim is about, or empty."},
+                    "timeframe": {"type": "string", "description": "Year or period the claim is about, or empty."},
+                },
+            },
+        }
+    },
+}
+
+
+PROMPT = """You extract checkable factual claims from a YouTube transcript chunk.
+
+Rules:
+- Copy `quote` VERBATIM from the transcript. Do not fix grammar, punctuation or
+  capitalisation. It must appear character-for-character in the text below, or
+  the claim will be discarded.
+- Write `claim` as a standalone sentence a stranger could check without having
+  watched the video: resolve pronouns ("they", "it"), vague references ("the
+  government", "this country") and relative times ("last year") using the video
+  title and surrounding transcript.
+- Set `checkworthy` to false for opinions, predictions, jokes, sarcasm,
+  rhetorical questions, personal anecdotes and value judgements. Extract them
+  anyway with checkworthy=false rather than silently dropping them.
+- Do NOT invent claims that are not stated in this chunk.
+- Prefer specific, consequential, verifiable assertions over trivia.
+- Return at most {limit} claims for this chunk.
+
+Video title: {title}
+
+Transcript chunk:
+-------------------------
+{chunk}
+-------------------------
+"""
+
+
+def chunk_segments(segments: list[TranscriptSegment]) -> list[list[TranscriptSegment]]:
+    """Split the transcript into time-bounded windows.
+
+    Chunking by time rather than by sentence is what makes unpunctuated
+    auto-captions workable, and it lets long videos be processed in parallel
+    instead of truncated.
+    """
+    chunks: list[list[TranscriptSegment]] = []
+    current: list[TranscriptSegment] = []
+    current_chars = 0
+    window_start = segments[0].start if segments else 0.0
+
+    for segment in segments:
+        too_long = segment.start - window_start >= CHUNK_SECONDS
+        too_big = current_chars + len(segment.text) > CHUNK_MAX_CHARS
+        if current and (too_long or too_big):
+            chunks.append(current)
+            current = []
+            current_chars = 0
+            window_start = segment.start
+        current.append(segment)
+        current_chars += len(segment.text) + 1
+
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def render_chunk(chunk: list[TranscriptSegment]) -> str:
+    return "\n".join(f"[{int(item.start // 60):02d}:{int(item.start % 60):02d}] {item.text}" for item in chunk)
+
+
+async def _extract_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, limit: int) -> list[ExtractedClaim]:
+    prompt = PROMPT.format(limit=limit, title=video.title or "(unknown)", chunk=render_chunk(chunk))
+    payload, _ = await structured_call(
+        prompt=prompt,
+        schema_name="claim_extraction",
+        schema=EXTRACTION_SCHEMA,
+        max_output_tokens=3000,
+    )
+
+    results: list[ExtractedClaim] = []
+    for item in payload.get("claims", []):
+        if not item.get("checkworthy"):
+            continue
+        quote = (item.get("quote") or "").strip()
+        claim = (item.get("claim") or "").strip()
+        if not quote or not claim:
+            continue
+        try:
+            claim_type = ClaimType(item.get("claim_type", "general"))
+        except ValueError:
+            claim_type = ClaimType.GENERAL
+        results.append(
+            ExtractedClaim(
+                quote=quote[:2000],
+                claim=claim[:2000],
+                claim_type=claim_type,
+                country=(item.get("country") or "").strip() or None,
+                timeframe=(item.get("timeframe") or "").strip() or None,
+            )
+        )
+    return results
+
+
+def _deduplicate(claims: list[ExtractedClaim]) -> list[ExtractedClaim]:
+    """Drop near-duplicate claims, which repeat when a speaker restates a point."""
+    unique: list[ExtractedClaim] = []
+    seen: list[set[str]] = []
+
+    for claim in claims:
+        # Tokenise rather than split: trailing punctuation would otherwise make
+        # "year." and "year" count as different words and hide a duplicate.
+        tokens = {word for word in _WORD.findall(claim.claim.lower()) if len(word) > 3}
+        if not tokens:
+            continue
+        duplicate = False
+        for previous in seen:
+            overlap = len(tokens & previous) / max(1, min(len(tokens), len(previous)))
+            if overlap > 0.75:
+                duplicate = True
+                break
+        if not duplicate:
+            seen.append(tokens)
+            unique.append(claim)
+    return unique
+
+
+async def extract_claims(segments: list[TranscriptSegment], video: VideoMetadata) -> list[ExtractedClaim]:
+    config = settings()
+    chunks = chunk_segments(segments)
+    if not chunks:
+        return []
+
+    # Ask each chunk for a slightly generous share so the final cap can pick the
+    # best across the whole video rather than front-loading the first chunk.
+    per_chunk = max(2, min(6, config.max_claims))
+    results = await asyncio.gather(
+        *(_extract_chunk(chunk, video, per_chunk) for chunk in chunks),
+        return_exceptions=True,
+    )
+
+    collected: list[ExtractedClaim] = []
+    failures = 0
+    for result in results:
+        if isinstance(result, BaseException):
+            failures += 1
+            continue
+        collected.extend(result)
+
+    if not collected and failures == len(chunks):
+        raise LLMUnavailable("Claim extraction failed for every transcript chunk.")
+
+    return _deduplicate(collected)[: config.max_claims]

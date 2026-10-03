@@ -46,3 +46,21 @@ h2 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0; text-transform: none; 
 .legend .false { color: #ef4444; }
 .legend .potentially_false { color: #f59e0b; }
 .legend .misleading { color: #facc15; }
+
+/* Verbatim transcript span the claim was taken from. */
+.said { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid #3b4254; color: #8b90a0; font-size: 12px; font-style: italic; line-height: 1.4; }
+
+.evidence { gap: 10px; }
+.evidence-row { display: grid; gap: 4px; }
+.evidence-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+.evidence-quote { margin: 2px 0 0; color: #8b90a0; font-size: 11px; line-height: 1.4; }
+
+.tag { border-radius: 4px; padding: 2px 5px; background: #2a3040; color: #c3c7d2; font-size: 9px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.tag-primary, .tag-academic { background: #1e3a5f; color: #93c5fd; }
+.tag-fact_checker { background: #3b2f5e; color: #c4b5fd; }
+.tag-reference { background: #30354a; color: #b9c0d4; }
+.tag-journalism, .tag-web { background: #2a3040; color: #a9afc0; }
+.tag-verified { background: #14432f; color: #6ee7b7; }
+.tag-unverified { background: #4a1d26; color: #fca5a5; }
+.tag-unknown { background: #3a3222; color: #fcd34d; }
+.tag-contradicts { background: #4a2a1d; color: #fdba74; }
