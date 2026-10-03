@@ -90,8 +90,8 @@ Rules:
 - Resolve pronouns ("they", "it") and vague references ("the government",
   "this country") using the video title and surrounding transcript. If the
   transcript is not in English, write the claim in English.
-- Today's date is {today}. Resolve relative times — "on Thursday", "four days
-  ago", "last month", "recently" — against TODAY, not against any year you
+- Resolve relative times — "on Thursday", "four days ago", "last month",
+  "recently" — against the current date given below, not against any year you
   associate with the subject matter. A video discussing current events is
   almost always discussing them now.
 - Never invent a year. If the transcript does not establish when something
@@ -122,7 +122,7 @@ Rules:
   field, not a body. A literal rendering that changes the meaning turns a
   correct statement into a false one.
 - Prefer specific, consequential, verifiable assertions over trivia.
-- Return at most {limit} claims for this chunk.
+- Return at most the number of claims stated below.
 
 Choosing `claim_type`:
 - definitional : mathematics, logic, or a definition true by established
@@ -135,6 +135,10 @@ Choosing `claim_type`:
 - political    : a contested public claim about policy, law or public figures.
 - general      : anything else.
 
+=== Everything above is fixed. The material to process follows. ===
+
+Today's date: {today}
+Maximum claims for this chunk: {limit}
 Video title: {title}
 
 Transcript chunk:
@@ -188,6 +192,7 @@ async def _extract_chunk(chunk: list[TranscriptSegment], video: VideoMetadata, l
         schema_name="claim_extraction",
         schema=EXTRACTION_SCHEMA,
         max_output_tokens=3000,
+        cache_key="ytfc-extract",
     )
 
     results: list[ExtractedClaim] = []

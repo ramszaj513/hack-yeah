@@ -22,6 +22,42 @@ class LLMUnavailable(RuntimeError):
     """Raised when no API key is configured or the provider call fails."""
 
 
+class Usage:
+    """Running token totals, so prompt-cache savings are visible rather than assumed."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.input_tokens = 0
+        self.cached_tokens = 0
+        self.output_tokens = 0
+
+    def record(self, response: Any) -> None:
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        self.calls += 1
+        self.input_tokens += getattr(usage, "input_tokens", 0) or 0
+        self.output_tokens += getattr(usage, "output_tokens", 0) or 0
+        details = getattr(usage, "input_tokens_details", None)
+        self.cached_tokens += getattr(details, "cached_tokens", 0) or 0
+
+    @property
+    def cached_share(self) -> float:
+        return self.cached_tokens / self.input_tokens if self.input_tokens else 0.0
+
+    def summary(self) -> str:
+        return (
+            f"{self.calls} calls · input {self.input_tokens:,} "
+            f"(cached {self.cached_tokens:,} = {self.cached_share:.0%}) · output {self.output_tokens:,}"
+        )
+
+    def reset(self) -> None:
+        self.__init__()
+
+
+usage = Usage()
+
+
 def _client():
     try:
         from openai import AsyncOpenAI
@@ -72,6 +108,7 @@ async def structured_call(
     model: str | None = None,
     web_search: bool = False,
     max_output_tokens: int = 4096,
+    cache_key: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """Run one Responses call and return (parsed JSON, grounding URLs)."""
 
@@ -91,12 +128,19 @@ async def structured_call(
     }
     if web_search:
         request["tools"] = [{"type": "web_search"}]
+    if cache_key:
+        # Segments the provider's prompt cache. Calls sharing a prefix must
+        # also share this key, or each one lands in a different bucket and
+        # nothing is reused.
+        request["prompt_cache_key"] = cache_key
 
     client = _client()
     try:
         response = await client.responses.create(**request)
     except Exception as exc:
         raise LLMUnavailable(str(exc)) from exc
+
+    usage.record(response)
 
     text = getattr(response, "output_text", "") or ""
     if not text.strip():

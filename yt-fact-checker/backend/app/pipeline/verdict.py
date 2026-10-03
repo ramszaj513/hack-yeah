@@ -91,13 +91,13 @@ REFUTATION_SCHEMA = {
 }
 
 
+# Static text first, variable text last.
+#
+# OpenAI caches the longest common PREFIX of a prompt, so the rules below are
+# billed at the cached rate on every call after the first. With the claim and
+# evidence at the top, as they were, the prefix differed for every claim and
+# nothing was ever cached.
 VERDICT_PROMPT = """You are adjudicating one factual claim against a fixed evidence set.
-
-Claim: {claim}
-{context}
-
-Evidence:
-{evidence}
 
 Rules:
 - Judge ONLY on the evidence above. You have no other knowledge for this task.
@@ -177,18 +177,19 @@ Rules:
   `potentially_false` when evidence leans against it without being decisive.
 - Set unverified_reason to "" for definitive verdicts.
 
-Verdicts: {verdicts}
+Verdicts: false, potentially_false, misleading, supported, context_needed, couldnt_verify
+
+=== Everything above is fixed. The case to decide follows. ===
+
+Claim: {claim}
+{context}
+
+Evidence:
+{evidence}
 """
 
 
 REFUTATION_PROMPT = """Check this verdict for material defects.
-
-Claim: {claim}
-Proposed verdict: {verdict}
-Stated basis: {basis}
-
-Evidence:
-{evidence}
 
 The verdict STANDS by default. Overturn it only for a defect you can name that
 would change what a reader concludes:
@@ -316,7 +317,6 @@ async def adjudicate(
         claim=context.claim,
         context=_context_lines(context),
         evidence=render_evidence(docs),
-        verdicts=", ".join(VERDICT_VALUES),
     )
 
     payload, _ = await structured_call(
@@ -325,6 +325,7 @@ async def adjudicate(
         schema=VERDICT_SCHEMA,
         model=model,
         max_output_tokens=1600,
+        cache_key="ytfc-verdict",
     )
 
     try:
@@ -359,6 +360,7 @@ async def adjudicate(
                 schema=REFUTATION_SCHEMA,
                 model=model,
                 max_output_tokens=900,
+                cache_key="ytfc-refute",
             )
         except LLMUnavailable:
             challenge = {"verdict_holds": True}

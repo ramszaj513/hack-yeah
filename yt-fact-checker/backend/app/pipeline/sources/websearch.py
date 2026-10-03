@@ -94,6 +94,7 @@ class WebSearchSource:
                 schema=SEARCH_SCHEMA,
                 web_search=True,
                 max_output_tokens=2500,
+                cache_key="ytfc-search",
             )
         except LLMUnavailable:
             return []
