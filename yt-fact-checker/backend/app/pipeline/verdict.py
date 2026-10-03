@@ -165,6 +165,19 @@ Rules:
   about what has been APPROVED, AUTHORISED or BUILT so far. "They plan 26
   reactors" is not contradicted by a permit covering 24: the permit is a
   different fact. The same holds for targets, proposals and applications.
+- Mark a citation's stance as "contradicts" only when the source asserts
+  something incompatible with the claim. A source that simply does not mention
+  the claim, or that says no documentary evidence survives, is not
+  contradicting it — use "context". The stance is shown to the viewer as a
+  badge, so calling silence a contradiction tells them a source disproves
+  something it never addressed.
+- When a claim has several parts and the evidence settles some but not others,
+  do not call the whole thing false. Say which part holds and return
+  context_needed or couldnt_verify for the rest. "He visited Gdansk and Berlin"
+  with Berlin confirmed and Gdansk merely undocumented is not a false claim.
+- A record that is missing is not a record that refutes. Historical sources are
+  incomplete by nature, and "there is no documentary evidence" means the
+  question is open, not settled against the claim.
 - Never return false or potentially_false for a recent event on the strength of
   evidence that predates it. If the claim is dated and every excerpt is older
   than that date — a standing institutional page, a prior year's results — the

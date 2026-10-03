@@ -179,3 +179,23 @@ def test_scientific_claims_reach_the_literature() -> None:
 
     assert "europe_pmc" in ROUTES[ClaimType.SCIENTIFIC]
     assert "google_fact_check" in ROUTES[ClaimType.POLITICAL]
+
+
+def test_claims_can_borrow_sources_their_neighbours_found() -> None:
+    """Evidence is retrieved per claim, which once let two claims about the same
+    episode reach opposite verdicts — one citing a passage the other was never
+    shown. Pooling what the whole video found is what stops that."""
+    from app.pipeline.orchestrator import _relevant_from_pool
+    from app.pipeline.sources.base import ClaimContext, RetrievedDoc
+
+    def doc(url: str, snippet: str) -> RetrievedDoc:
+        return RetrievedDoc(title="t", publisher="p", url=url, sourceType="web", snippet=snippet)
+
+    context = ClaimContext(claim="The pink ribbon Chopin kept until his death was a gift from Konstancja.")
+    own = [doc("https://a.test", "something unrelated entirely")]
+    relevant = doc("https://b.test", "Konstancja gave Chopin a pink ribbon which he kept until the end of his life.")
+    irrelevant = doc("https://c.test", "A page about sourdough bread hydration ratios.")
+
+    picked = _relevant_from_pool(context, own, [*own, relevant, irrelevant])
+
+    assert [item.url for item in picked] == ["https://b.test"]

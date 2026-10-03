@@ -10,6 +10,8 @@ panel can fill in progressively instead of waiting on the slowest claim.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
+import re
 from typing import Awaitable, Callable
 from uuid import uuid4
 
@@ -23,10 +25,10 @@ from app.models.schemas import (
     UnverifiedReason,
     Verdict,
 )
-from app.pipeline.anchoring import anchor_quote
+from app.pipeline.anchoring import Anchor, anchor_quote
 from app.pipeline.extraction import ExtractedClaim, extract_claims
 from app.pipeline.llm import LLMUnavailable
-from app.pipeline.sources import gather_evidence
+from app.pipeline.sources import Retrieval, gather_evidence
 from app.pipeline.sources.base import ClaimContext
 from app.pipeline.verdict import adjudicate
 from app.pipeline.verification import verify_citations
@@ -36,16 +38,49 @@ Emit = Callable[[dict], Awaitable[None]]
 
 MAX_CONCURRENT_CLAIMS = 6
 
+# How much of a claim's vocabulary a pooled source must share before it is
+# offered to that claim as extra evidence.
+POOL_MIN_OVERLAP = 0.3
+POOL_EXTRA_DOCS = 3
+
+_WORD = re.compile(r"[a-z0-9]+")
+
 
 async def _noop(_: dict) -> None:
     return None
 
 
-async def _process_claim(
+@dataclass
+class Prepared:
+    """A claim with its own evidence, before anything has been decided."""
+
+    extracted: ExtractedClaim
+    anchor: Anchor
+    context: ClaimContext
+    retrieval: Retrieval
+
+
+def _unresolved(prepared: Prepared, reason: UnverifiedReason, basis: str) -> Claim:
+    item = prepared.extracted
+    return Claim(
+        text=item.claim,
+        quote=item.quote,
+        startSeconds=prepared.anchor.startSeconds,
+        endSeconds=prepared.anchor.endSeconds,
+        verdict=Verdict.COULDNT_VERIFY,
+        claimType=item.claim_type,
+        unverifiedReason=reason,
+        basis=basis,
+        evidence=[],
+        context=Context(country=item.country, timeframe=item.timeframe),
+    )
+
+
+async def _prepare(
     extracted: ExtractedClaim,
     segments: list[TranscriptSegment],
     semaphore: asyncio.Semaphore,
-) -> Claim | None:
+) -> Prepared | None:
     anchor = anchor_quote(extracted.quote, segments)
     if anchor is None:
         # The quote is not in the transcript, so the claim was invented.
@@ -56,71 +91,84 @@ async def _process_claim(
         country=extracted.country,
         timeframe=extracted.timeframe,
     )
-
     async with semaphore:
         retrieval = await gather_evidence(context, extracted.claim_type)
+    return Prepared(extracted=extracted, anchor=anchor, context=context, retrieval=retrieval)
 
-        if not retrieval.docs:
-            reason = (
-                UnverifiedReason.PROVIDER_ERROR
-                if retrieval.all_failed
-                else UnverifiedReason.NO_EVIDENCE_FOUND
-            )
-            basis = (
-                "Every evidence provider failed for this claim, so it was not assessed."
-                if retrieval.all_failed
-                else "No source addressing this claim was found. That is not evidence the claim is false."
-            )
-            claim = Claim(
-                text=extracted.claim,
-                quote=extracted.quote,
-                startSeconds=anchor.startSeconds,
-                endSeconds=anchor.endSeconds,
-                verdict=Verdict.COULDNT_VERIFY,
-                claimType=extracted.claim_type,
-                unverifiedReason=reason,
-                basis=basis,
-                evidence=[],
-                context=Context(country=extracted.country, timeframe=extracted.timeframe),
-            )
-            return claim
 
+def _relevant_from_pool(context: ClaimContext, own: list, pool: list) -> list:
+    """Lend a claim the sources its neighbours found.
+
+    Retrieval runs per claim, so two claims about the same episode can end up
+    with different sources and reach contradictory verdicts — one citing a
+    passage the other was never shown. Pooling what the whole video turned up
+    lets each claim see the same material.
+    """
+    seen = {doc.url.rstrip("/") for doc in own}
+    terms = {word for word in _WORD.findall(context.claim.lower()) if len(word) > 3}
+    if not terms:
+        return []
+
+    scored: list[tuple[float, object]] = []
+    for doc in pool:
+        if doc.url.rstrip("/") in seen:
+            continue
+        haystack = set(_WORD.findall(f"{doc.title} {doc.snippet}".lower()))
+        if not haystack:
+            continue
+        overlap = len(terms & haystack) / len(terms)
+        if overlap >= POOL_MIN_OVERLAP:
+            scored.append((overlap, doc))
+
+    scored.sort(key=lambda row: row[0], reverse=True)
+    return [doc for _, doc in scored[:POOL_EXTRA_DOCS]]
+
+
+async def _decide(prepared: Prepared, pool: list, semaphore: asyncio.Semaphore) -> Claim:
+    item = prepared.extracted
+    retrieval = prepared.retrieval
+
+    docs = list(retrieval.docs) + _relevant_from_pool(prepared.context, retrieval.docs, pool)
+
+    if not docs:
+        return _unresolved(
+            prepared,
+            UnverifiedReason.PROVIDER_ERROR if retrieval.all_failed else UnverifiedReason.NO_EVIDENCE_FOUND,
+            "Every evidence provider failed for this claim, so it was not assessed."
+            if retrieval.all_failed
+            else "No source addressing this claim was found. That is not evidence the claim is false.",
+        )
+
+    async with semaphore:
         try:
             # Adjudication and refutation run on the stronger model: extraction
             # is a structural task, but deciding what the evidence actually
             # establishes is where capability shows up in the output.
             result = await adjudicate(
-                context,
-                retrieval.docs,
+                prepared.context,
+                docs,
                 model=settings().openai_reasoning_model,
                 refute=settings().enable_refutation_pass,
             )
         except LLMUnavailable as exc:
-            return Claim(
-                text=extracted.claim,
-                quote=extracted.quote,
-                startSeconds=anchor.startSeconds,
-                endSeconds=anchor.endSeconds,
-                verdict=Verdict.COULDNT_VERIFY,
-                claimType=extracted.claim_type,
-                unverifiedReason=UnverifiedReason.PROVIDER_ERROR,
-                basis=f"The adjudication step was unavailable: {exc}",
-                evidence=[],
-                context=Context(country=extracted.country, timeframe=extracted.timeframe),
+            return _unresolved(
+                prepared,
+                UnverifiedReason.PROVIDER_ERROR,
+                f"The adjudication step was unavailable: {exc}",
             )
 
     claim = Claim(
-        text=extracted.claim,
-        quote=extracted.quote,
-        startSeconds=anchor.startSeconds,
-        endSeconds=anchor.endSeconds,
+        text=item.claim,
+        quote=item.quote,
+        startSeconds=prepared.anchor.startSeconds,
+        endSeconds=prepared.anchor.endSeconds,
         verdict=result.verdict,
-        claimType=extracted.claim_type,
+        claimType=item.claim_type,
         unverifiedReason=result.unverified_reason,
         confidence=result.confidence,
         basis=result.basis,
         evidence=result.evidence,
-        context=Context(country=extracted.country, timeframe=extracted.timeframe),
+        context=Context(country=item.country, timeframe=item.timeframe),
     )
 
     if settings().enable_citation_verification:
@@ -179,21 +227,43 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
     await send({"type": "status", "status": "gathering_evidence"})
 
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_CLAIMS)
-    tasks = [
-        asyncio.create_task(_process_claim(item, segments, semaphore))
-        for item in extracted
-    ]
-
     claims: list[Claim] = []
     dropped = 0
+
+    # Phase one: gather evidence for every claim, then pool it. Claims are not
+    # decided yet, because a claim judged before its neighbours have searched
+    # can contradict one judged after them.
+    prepared_results = await asyncio.gather(
+        *(_prepare(item, segments, semaphore) for item in extracted),
+        return_exceptions=True,
+    )
+
+    prepared: list[Prepared] = []
+    for result in prepared_results:
+        if isinstance(result, BaseException) or result is None:
+            dropped += 1
+            continue
+        prepared.append(result)
+
+    pool = []
+    pooled_urls: set[str] = set()
+    for item in prepared:
+        for doc in item.retrieval.docs:
+            url = doc.url.rstrip("/")
+            if url not in pooled_urls:
+                pooled_urls.add(url)
+                pool.append(doc)
+
+    await send({"type": "status", "status": "reviewing_results"})
+
+    # Phase two: decide each claim against its own evidence plus whatever the
+    # pool adds, streaming results as they land.
+    tasks = [asyncio.create_task(_decide(item, pool, semaphore)) for item in prepared]
 
     for future in asyncio.as_completed(tasks):
         try:
             claim = await future
         except Exception:
-            dropped += 1
-            continue
-        if claim is None:
             dropped += 1
             continue
         claims.append(claim)
@@ -206,8 +276,6 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
         )
 
     claims.sort(key=lambda item: item.startSeconds)
-
-    await send({"type": "status", "status": "reviewing_results"})
 
     return CheckResponse(
         analysisId=analysis_id,
