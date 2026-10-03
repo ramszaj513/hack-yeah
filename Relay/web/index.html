@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Relay — sprawiedliwa pomoc na trasach</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <main id="map"></main>
+
+    <aside id="panel">
+      <header class="panel-head">
+        <div class="head-row">
+          <h1>Relay</h1>
+          <button id="help-btn" class="help-btn" title="Jak używać aplikacji?">?</button>
+        </div>
+        <p class="tagline">Sprawiedliwa pomoc na trasach, które i tak się dzieją.</p>
+      </header>
+
+      <section class="quickstart">
+        <strong>Jak to czytać?</strong>
+        <ol>
+          <li>Wybierz <b>tryb</b> (Fair-share vs Nearest-fit).</li>
+          <li>Popatrz na <b>pomarańczowe linie</b> — to propozycje objazdów.</li>
+          <li>Kliknij <b>Przejmij</b>, żeby zrealizować dostawę.</li>
+        </ol>
+        <button class="link-btn" id="help-btn-2">Pełna instrukcja →</button>
+      </section>
+
+      <section class="block">
+        <h2>1 · Tryb dopasowania</h2>
+        <div class="mode-switch" id="mode-switch">
+          <button data-mode="fair_share">Fair-share</button>
+          <button data-mode="nearest_fit">Nearest-fit</button>
+        </div>
+        <p class="hint" id="mode-hint"></p>
+      </section>
+
+      <section class="block">
+        <h2>2 · Starvation Index</h2>
+        <p class="section-help">Niezaspokojone potrzeby ważone pilnością. Niżej = lepiej.
+          „Stan” to baza, „po sugestiach” — gdyby przejąć wszystkie propozycje.</p>
+        <div class="starvation">
+          <div class="starve-now">
+            <span class="starve-value" id="starvation-value">—</span>
+            <span class="starve-label">stan</span>
+          </div>
+          <div class="starve-arrow">→</div>
+          <div class="starve-proj">
+            <span class="starve-value" id="starvation-proj">—</span>
+            <span class="starve-label">po sugestiach</span>
+          </div>
+        </div>
+        <div class="points" id="points"></div>
+      </section>
+
+      <section class="block">
+        <h2>3 · Sugerowane objazdy <span class="count" id="suggestions-count">0</span></h2>
+        <p class="section-help">Propozycje dopasowania. Nic nie jest zarezerwowane, dopóki
+          nie klikniesz „Przejmij”.</p>
+        <div class="suggestions" id="suggestions"></div>
+      </section>
+
+      <section class="block">
+        <h2>Sterowanie</h2>
+        <button class="ghost" id="reset-btn">Reset do seeda</button>
+      </section>
+
+      <footer class="panel-foot">
+        <span id="legend-cats"></span>
+      </footer>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Skrócona instrukcja w aplikacji -->
+  <div id="help-overlay" class="help-overlay" hidden>
+    <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <button class="help-close" id="help-close" title="Zamknij">×</button>
+      <h2 id="help-title">Jak używać Relay</h2>
+
+      <p class="help-lead">
+        Relay wpasowuje dary w przejazdy, które i tak się dzieją, i rozdziela pomoc
+        <b>sprawiedliwie</b> — tak, żeby dalekie i pilne punkty nie zostały bez wsparcia.
+      </p>
+
+      <h3>Mapa</h3>
+      <ul class="help-legend">
+        <li><span class="key line-gray"></span> szara linia — <b>przejazd</b> (O → D)</li>
+        <li><span class="key dot-small"></span> mała kropka — <b>skrzynka</b> (kolor = kategoria)</li>
+        <li><span class="key dot-big"></span> duże koło — <b>punkt potrzeb</b> (kolor = pilność, rozmiar = braki)</li>
+        <li><span class="key line-orange"></span> pomarańczowa linia — <b>sugerowany objazd</b></li>
+      </ul>
+
+      <h3>Panel — 3 kroki</h3>
+      <ol class="help-steps">
+        <li><b>Tryb:</b> Fair-share (sprawiedliwy) albo Nearest-fit (baseline „Uber”).</li>
+        <li><b>Starvation Index:</b> „stan” vs „po sugestiach” + słupki zapełnienia punktów.</li>
+        <li><b>Sugerowane objazdy:</b> kliknij <b>Przejmij</b>, żeby zrealizować dostawę.</li>
+      </ol>
+
+      <h3>Najkrótsze demo</h3>
+      <p>
+        Ustaw <b>Fair-share</b> → zobacz, że daleki punkt „Rembertów-Wschód” (pilność 5)
+        jest obsłużony. Kliknij <b>Reset</b>, ustaw <b>Nearest-fit</b> → ten sam punkt ma 0%,
+        a <b>Starvation Index jest wyższy</b>. To cała różnica.
+      </p>
+
+      <p class="help-note">
+        Sugestie są efemeryczne — nie rezerwują zasobów, dopóki nie klikniesz „Przejmij”.
+        Pierwsze przejęcie wygrywa.
+      </p>
+
+      <label class="help-remember">
+        <input type="checkbox" id="help-hide" /> Nie pokazuj przy następnym wejściu
+      </label>
+      <button class="help-primary" id="help-ok">Rozumiem, zaczynam</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+  <script src="/app.js"></script>
+</body>
+</html>
