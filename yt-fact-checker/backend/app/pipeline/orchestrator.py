@@ -21,12 +21,14 @@ from app.models.schemas import (
     CheckResponse,
     Claim,
     Context,
+    Signal,
     TranscriptSegment,
     UnverifiedReason,
     Verdict,
 )
 from app.pipeline.anchoring import Anchor, anchor_quote
 from app.pipeline.extraction import ExtractedClaim, extract_claims
+from app.pipeline.rhetoric import detect_signals
 from app.pipeline.llm import LLMUnavailable
 from app.pipeline.sources import Retrieval, gather_evidence
 from app.pipeline.sources.base import ClaimContext
@@ -180,6 +182,39 @@ async def _decide(prepared: Prepared, pool: list, semaphore: asyncio.Semaphore) 
     return claim
 
 
+async def _collect_signals(
+    segments: list[TranscriptSegment],
+    video: VideoMetadata,
+    send: Emit,
+) -> list[Signal]:
+    """Review rhetoric and anchor each signal, emitting as they resolve."""
+    try:
+        detected = await detect_signals(segments, video)
+    except LLMUnavailable:
+        return []
+
+    signals: list[Signal] = []
+    for item in detected:
+        anchor = anchor_quote(item.quote, segments)
+        # Same gate as a claim: a passage that is not in the transcript was
+        # imagined, and must not be marked on the timeline.
+        if anchor is None:
+            continue
+        signal = Signal(
+            quote=item.quote,
+            startSeconds=anchor.startSeconds,
+            endSeconds=anchor.endSeconds,
+            technique=item.technique,
+            severity=item.severity,
+            note=item.note,
+        )
+        signals.append(signal)
+        await send({"type": "signal", "signal": signal.model_dump(mode="json")})
+
+    signals.sort(key=lambda item: item.startSeconds)
+    return signals
+
+
 async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> CheckResponse:
     send = emit or _noop
     config = settings()
@@ -211,6 +246,10 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
 
     await send({"type": "status", "status": "extracting_claims"})
 
+    # Rhetorical review needs no retrieval, so it runs alongside the factual
+    # pass rather than adding to the wait.
+    signals_task = asyncio.create_task(_collect_signals(segments, request.video, send))
+
     try:
         extracted = await extract_claims(segments, request.video)
     except LLMUnavailable as exc:
@@ -224,6 +263,7 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
         return CheckResponse(
             analysisId=analysis_id,
             status="no_claims",
+            signals=await signals_task,
             warnings=["No checkable factual claims were found in this video."],
         )
 
@@ -306,5 +346,6 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
         status="complete",
         mode="live",
         claims=claims,
+        signals=await signals_task,
         warnings=warnings,
     )

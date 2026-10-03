@@ -1,4 +1,5 @@
-import type { Claim, RuntimeMessage, TranscriptSegment, VideoMetadata } from "../shared/types";
+import type { Claim, RuntimeMessage, Settings, Signal, TranscriptSegment, VideoMetadata } from "../shared/types";
+import { DEFAULT_SETTINGS } from "../shared/types";
 
 let currentVideoId: string | null = null;
 let checkButton: HTMLButtonElement | null = null;
@@ -15,6 +16,19 @@ const VERDICT_LABELS: Record<string, string> = {
 // notice a little longer gives the viewer time to actually read it.
 const MIN_VISIBLE_SECONDS = 7;
 
+const TECHNIQUE_LABELS: Record<string, string> = {
+  undisclosed_ad: "Undisclosed promotion",
+  emotional_manipulation: "Emotional pressure",
+  loaded_language: "Loaded language",
+  logical_fallacy: "Faulty reasoning",
+  cherry_picking: "Selective evidence",
+  conspiracy_framing: "Conspiracy framing",
+  political_framing: "One-sided framing",
+  unfalsifiable: "Unfalsifiable",
+};
+
+let settings: Settings = DEFAULT_SETTINGS;
+let flaggedSignals: Signal[] = [];
 let flaggedClaims: Claim[] = [];
 let popupHost: HTMLElement | null = null;
 let popupClaimId: string | null = null;
@@ -192,13 +206,71 @@ function clearMarkers(): void {
   markerHost = null;
 }
 
-function claimAtTime(seconds: number): Claim | null {
-  for (const claim of flaggedClaims) {
-    if (dismissed.has(claim.id)) continue;
-    const until = Math.max(claim.endSeconds, claim.startSeconds + MIN_VISIBLE_SECONDS);
-    if (seconds >= claim.startSeconds && seconds <= until) return claim;
+interface Mark {
+  id: string;
+  kind: "claim" | "signal";
+  startSeconds: number;
+  endSeconds: number;
+  label: string;
+  tone: string;
+  headline: string;
+  detail: string;
+  evidenceUrl?: string;
+  evidenceLabel?: string;
+}
+
+function activeSignals(): Signal[] {
+  if (!settings.showSignals) return [];
+  return settings.strongSignalsOnly
+    ? flaggedSignals.filter((item) => item.severity !== "low")
+    : flaggedSignals;
+}
+
+function marks(): Mark[] {
+  const fromClaims: Mark[] = flaggedClaims.map((claim) => {
+    const source = claim.evidence.find((item) => item.quoteVerified === true) ?? claim.evidence[0];
+    return {
+      id: claim.id,
+      kind: "claim",
+      startSeconds: claim.startSeconds,
+      endSeconds: claim.endSeconds,
+      label: VERDICT_LABELS[claim.verdict] ?? claim.verdict,
+      tone: claim.verdict,
+      headline: claim.text,
+      detail: claim.basis,
+      evidenceUrl: source?.url,
+      evidenceLabel: source ? `Source: ${source.publisher}` : undefined,
+    };
+  });
+
+  const fromSignals: Mark[] = activeSignals().map((signal) => ({
+    id: signal.id,
+    kind: "signal",
+    startSeconds: signal.startSeconds,
+    endSeconds: signal.endSeconds,
+    label: TECHNIQUE_LABELS[signal.technique] ?? signal.technique,
+    tone: `signal-${signal.severity}`,
+    headline: signal.note,
+    detail: `“${signal.quote}”`,
+  }));
+
+  return [...fromClaims, ...fromSignals].sort((a, b) => a.startSeconds - b.startSeconds);
+}
+
+function markAtTime(seconds: number): Mark | null {
+  for (const mark of marks()) {
+    if (dismissed.has(mark.id)) continue;
+    const until = Math.max(mark.endSeconds, mark.startSeconds + MIN_VISIBLE_SECONDS);
+    if (seconds >= mark.startSeconds && seconds <= until) return mark;
   }
   return null;
+}
+
+function textElement(tag: string, text: string, className?: string): HTMLElement {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  return node;
 }
 
 function hidePopup(): void {
@@ -207,61 +279,45 @@ function hidePopup(): void {
   popupClaimId = null;
 }
 
-function showPopup(claim: Claim): void {
-  // Attach to the player itself, so the notice survives theater and
-  // fullscreen, where YouTube reparents everything else.
+function showPopup(mark: Mark): void {
   const player = document.querySelector<HTMLElement>("#movie_player");
   if (!player) return;
 
   hidePopup();
-  popupClaimId = claim.id;
+  popupClaimId = mark.id;
 
   const host = document.createElement("div");
   host.className = "ytf-popup";
 
   const head = document.createElement("div");
   head.className = "ytf-popup-head";
-  const badge = document.createElement("span");
-  badge.className = `ytf-popup-badge ytf-popup-${claim.verdict}`;
-  badge.textContent = VERDICT_LABELS[claim.verdict] ?? claim.verdict;
-  head.append(badge);
+  head.append(textElement("span", mark.label, `ytf-popup-badge ytf-popup-${mark.tone}`));
 
   const close = document.createElement("button");
   close.className = "ytf-popup-close";
   close.type = "button";
   close.textContent = "✕";
-  close.title = "Dismiss for this claim";
+  close.title = "Dismiss";
   close.addEventListener("click", (event) => {
     event.stopPropagation();
-    dismissed.add(claim.id);
+    dismissed.add(mark.id);
     hidePopup();
   });
   head.append(close);
-  host.append(head);
+  host.append(head, textElement("p", mark.headline, "ytf-popup-claim"));
 
-  const text = document.createElement("p");
-  text.className = "ytf-popup-claim";
-  text.textContent = claim.text;
-  host.append(text);
-
-  if (claim.basis) {
-    const basis = document.createElement("p");
-    basis.className = "ytf-popup-basis";
-    basis.textContent = claim.basis;
-    host.append(basis);
-  }
+  if (mark.detail) host.append(textElement("p", mark.detail, "ytf-popup-basis"));
 
   const foot = document.createElement("div");
   foot.className = "ytf-popup-foot";
 
-  const verified = claim.evidence.find((item) => item.quoteVerified === true) ?? claim.evidence[0];
-  if (verified) {
+  if (mark.evidenceUrl && mark.evidenceLabel) {
     const link = document.createElement("a");
-    link.href = verified.url;
+    link.href = mark.evidenceUrl;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.className = "ytf-popup-link";
-    link.textContent = `Source: ${verified.publisher}`;
+    link.textContent = mark.evidenceLabel;
     link.addEventListener("click", (event) => event.stopPropagation());
     foot.append(link);
   }
@@ -269,10 +325,10 @@ function showPopup(claim: Claim): void {
   const details = document.createElement("button");
   details.className = "ytf-popup-more";
   details.type = "button";
-  details.textContent = "All sources";
+  details.textContent = "Open panel";
   details.addEventListener("click", (event) => {
     event.stopPropagation();
-    send({ type: "MARKER_CLICK", claimId: claim.id, startSeconds: claim.startSeconds });
+    send({ type: "MARKER_CLICK", claimId: mark.id, startSeconds: mark.startSeconds });
   });
   foot.append(details);
   host.append(foot);
@@ -283,13 +339,17 @@ function showPopup(claim: Claim): void {
 
 function syncPopup(): void {
   if (!videoEl) return;
-  const claim = claimAtTime(videoEl.currentTime);
-
-  if (claim === null) {
+  if (!settings.popups) {
     if (popupHost) hidePopup();
     return;
   }
-  if (claim.id !== popupClaimId) showPopup(claim);
+
+  const mark = markAtTime(videoEl.currentTime);
+  if (mark === null) {
+    if (popupHost) hidePopup();
+    return;
+  }
+  if (mark.id !== popupClaimId) showPopup(mark);
 }
 
 function attachPlaybackWatcher(): void {
@@ -304,33 +364,37 @@ function attachPlaybackWatcher(): void {
   });
 }
 
-function renderMarkers(claims: Claim[]): void {
+function renderMarkers(claims: Claim[], signals: Signal[]): void {
   clearMarkers();
-  const concerning = claims.filter((claim) => CONCERNING.includes(claim.verdict));
-  flaggedClaims = concerning;
+  flaggedClaims = claims.filter((claim) => CONCERNING.includes(claim.verdict));
+  flaggedSignals = signals;
   attachPlaybackWatcher();
-  if (concerning.length === 0) return;
+
+  const all = marks();
+  if (all.length === 0) return;
 
   const progress = document.querySelector<HTMLElement>(".ytp-progress-bar-container");
   const video = document.querySelector<HTMLVideoElement>("video");
   if (!progress) return;
+
   markerHost = document.createElement("div");
   markerHost.className = "ytf-marker-host";
-  const duration = video?.duration && Number.isFinite(video.duration)
-    ? video.duration
-    : Math.max(...concerning.map((claim) => claim.endSeconds), 1);
+  const duration =
+    video?.duration && Number.isFinite(video.duration)
+      ? video.duration
+      : Math.max(...all.map((mark) => mark.endSeconds), 1);
 
-  for (const claim of concerning) {
+  for (const mark of all) {
     const marker = document.createElement("button");
     marker.type = "button";
-    marker.className = `ytf-marker ytf-marker-${claim.verdict}`;
-    marker.style.left = `${Math.min(99.5, Math.max(0.5, (claim.startSeconds / duration) * 100))}%`;
-    marker.title = `${claim.verdict.replace("_", " ")}: ${claim.text}`;
-    marker.setAttribute("aria-label", `Open ${claim.verdict.replace("_", " ")} claim`);
+    marker.className = `ytf-marker ytf-marker-${mark.tone}`;
+    marker.style.left = `${Math.min(99.5, Math.max(0.5, (mark.startSeconds / duration) * 100))}%`;
+    marker.title = `${mark.label}: ${mark.headline}`;
+    marker.setAttribute("aria-label", mark.label);
     marker.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (video) video.currentTime = claim.startSeconds;
-      send({ type: "MARKER_CLICK", claimId: claim.id, startSeconds: claim.startSeconds });
+      if (video) video.currentTime = mark.startSeconds;
+      send({ type: "MARKER_CLICK", claimId: mark.id, startSeconds: mark.startSeconds });
     });
     markerHost.append(marker);
   }
@@ -345,6 +409,7 @@ function handleNavigation(): void {
   clearMarkers();
   hidePopup();
   flaggedClaims = [];
+  flaggedSignals = [];
   dismissed.clear();
   videoEl = null;
   if (checkButton) {
@@ -355,7 +420,17 @@ function handleNavigation(): void {
 }
 
 chrome.runtime.onMessage.addListener((message: any) => {
-  if (message.type === "RENDER_MARKERS") renderMarkers(message.claims as Claim[]);
+  if (message.type === "RENDER_MARKERS") {
+    renderMarkers((message.claims ?? []) as Claim[], (message.signals ?? []) as Signal[]);
+  }
+  if (message.type === "SETTINGS_CHANGED") {
+    settings = message.settings as Settings;
+    renderMarkers(
+      flaggedClaims,
+      flaggedSignals,
+    );
+    syncPopup();
+  }
   if (message.type === "START_CHECK") startCheck();
   if (message.type === "SEEK_TO") {
     const video = document.querySelector<HTMLVideoElement>("video");
@@ -378,6 +453,10 @@ style.textContent = `
   .ytf-marker-false { height: 20px; width: 9px; background: #ef4444; }
   .ytf-marker-potentially_false { height: 16px; width: 8px; background: #f59e0b; border-radius: 1px; transform: translate(-50%, -50%) rotate(45deg); }
   .ytf-marker-misleading { height: 12px; width: 7px; background: #facc15; border-radius: 50%; border-style: dotted; }
+  .ytf-marker-signal-low, .ytf-marker-signal-medium { height: 12px; width: 7px; background: #7c8fb5; border-radius: 2px; }
+  .ytf-marker-signal-high { height: 16px; width: 8px; background: #a97fd4; border-radius: 2px; }
+  .ytf-popup-signal-low, .ytf-popup-signal-medium { color: #9bb0d6; }
+  .ytf-popup-signal-high { color: #c4a2e8; }
 
   /* Sits above the control bar so it never covers the scrubber or captions. */
   .ytf-popup { position: absolute; left: 16px; bottom: 72px; z-index: 60; width: min(360px, 40%); padding: 14px; border-radius: 12px; background: #0f0f0fF2; color: #f1f1f1; font: 400 13px/1.5 Roboto, Arial, sans-serif; box-shadow: 0 6px 24px #0009; animation: ytf-pop .16s ease-out; }
@@ -401,6 +480,13 @@ style.textContent = `
 `;
 document.documentElement.append(style);
 
+void chrome.runtime
+  .sendMessage({ type: "GET_SETTINGS" })
+  .then((stored) => {
+    if (stored) settings = stored as Settings;
+  })
+  .catch(() => undefined);
+
 window.addEventListener("yt-navigate-finish", handleNavigation);
 window.addEventListener("popstate", handleNavigation);
 setInterval(() => {
@@ -409,6 +495,6 @@ setInterval(() => {
   // without clearing the reference, so connectedness is what to test.
   if (currentVideoId && !checkButton?.isConnected) injectCheckButton();
   // The player element is replaced on navigation, so re-attach if needed.
-  if (flaggedClaims.length > 0) attachPlaybackWatcher();
+  if (flaggedClaims.length > 0 || flaggedSignals.length > 0) attachPlaybackWatcher();
 }, 1000);
 handleNavigation();

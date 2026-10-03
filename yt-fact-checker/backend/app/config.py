@@ -30,6 +30,7 @@ class Settings:
     google_fact_check_api_key: str
 
     max_claims: int
+    max_signals: int
     max_transcript_segments: int
     enable_web_search: bool
     enable_citation_verification: bool
@@ -64,6 +65,7 @@ def settings() -> Settings:
         openai_reasoning_model=os.getenv("OPENAI_REASONING_MODEL", "gpt-5.4").strip(),
         google_fact_check_api_key=os.getenv("GOOGLE_FACT_CHECK_API_KEY", "").strip(),
         max_claims=_int("MAX_CLAIMS", 16),
+        max_signals=_int("MAX_SIGNALS", 10),
         max_transcript_segments=_int("MAX_TRANSCRIPT_SEGMENTS", 2000),
         enable_web_search=_flag("ENABLE_WEB_SEARCH", "true"),
         enable_citation_verification=_flag("ENABLE_CITATION_VERIFICATION", "true"),

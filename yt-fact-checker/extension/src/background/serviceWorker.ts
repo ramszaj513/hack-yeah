@@ -3,18 +3,43 @@ import type {
   Claim,
   RuntimeMessage,
   SessionState,
+  Settings,
+  Signal,
   StreamEvent,
   TranscriptSegment,
   VideoMetadata,
 } from "../shared/types";
+import { DEFAULT_SETTINGS } from "../shared/types";
 
 declare const API_BASE_URL: string;
 
 const initialState: SessionState = {
   status: "ready",
   claims: [],
+  signals: [],
   warnings: [],
 };
+
+async function getSettings(): Promise<Settings> {
+  const stored = await chrome.storage.local.get("settings");
+  return { ...DEFAULT_SETTINGS, ...((stored.settings as Partial<Settings> | undefined) ?? {}) };
+}
+
+async function setSettings(settings: Settings): Promise<Settings> {
+  await chrome.storage.local.set({ settings });
+  // The content script decides what to mark and when to interrupt, so it needs
+  // to hear about this immediately rather than on the next check.
+  const tabs = await chrome.tabs.query({ url: "*://*.youtube.com/watch*" });
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: "SETTINGS_CHANGED", settings });
+    } catch {
+      // Tab without the content script loaded; nothing to update.
+    }
+  }
+  return settings;
+}
 
 async function setState(next: Partial<SessionState>): Promise<SessionState> {
   const current = await chrome.storage.session.get("state");
@@ -61,10 +86,14 @@ async function openSidePanel(tabId?: number): Promise<void> {
   }
 }
 
-async function sendMarkers(tabId: number | undefined, claims: Claim[]): Promise<void> {
+async function sendMarkers(
+  tabId: number | undefined,
+  claims: Claim[],
+  signals: Signal[],
+): Promise<void> {
   if (tabId === undefined) return;
   try {
-    await chrome.tabs.sendMessage(tabId, { type: "RENDER_MARKERS", claims });
+    await chrome.tabs.sendMessage(tabId, { type: "RENDER_MARKERS", claims, signals });
   } catch {
     // The tab may have navigated while the backend was processing.
   }
@@ -99,7 +128,17 @@ async function applyEvent(
     const current = await getState();
     const claims = [...current.claims, event.claim].sort((a, b) => a.startSeconds - b.startSeconds);
     await setState({ claims });
-    await sendMarkers(tabId, claims);
+    await sendMarkers(tabId, claims, current.signals ?? []);
+    return;
+  }
+
+  if (event.type === "signal") {
+    const current = await getState();
+    const signals = [...(current.signals ?? []), event.signal].sort(
+      (a, b) => a.startSeconds - b.startSeconds,
+    );
+    await setState({ signals });
+    await sendMarkers(tabId, current.claims, signals);
     return;
   }
 
@@ -108,12 +147,13 @@ async function applyEvent(
     await setState({
       status: response.status === "complete" ? "complete" : response.status,
       claims: response.claims,
+      signals: response.signals ?? [],
       warnings: response.warnings,
       mode: response.mode,
       error: undefined,
       progress: undefined,
     });
-    await sendMarkers(tabId, response.claims);
+    await sendMarkers(tabId, response.claims, response.signals ?? []);
     return;
   }
 
@@ -163,7 +203,14 @@ async function checkVideo(
   transcript: TranscriptSegment[] | undefined,
   tabId?: number,
 ): Promise<void> {
-  await setState({ video, status: "loading_transcript", claims: [], warnings: [], error: undefined });
+  await setState({
+    video,
+    status: "loading_transcript",
+    claims: [],
+    signals: [],
+    warnings: [],
+    error: undefined,
+  });
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/check/stream`, {
@@ -205,6 +252,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       video: message.video,
       status: "loading_transcript",
       claims: [],
+      signals: [],
       warnings: [],
       mode: undefined,
       error: undefined,
@@ -223,6 +271,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       video: message.video ?? undefined,
       status: message.video ? "ready" : "unsupported",
       claims: [],
+      signals: [],
       warnings: [],
       mode: undefined,
       error: undefined,
@@ -249,6 +298,16 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       if (tab?.id !== undefined) void chrome.tabs.sendMessage(tab.id, message);
     });
     return false;
+  }
+
+  if (message.type === "GET_SETTINGS") {
+    void getSettings().then(sendResponse);
+    return true;
+  }
+
+  if (message.type === "SET_SETTINGS") {
+    void setSettings(message.settings).then(sendResponse);
+    return true;
   }
 
   if (message.type === "CLEAR_SESSION") {

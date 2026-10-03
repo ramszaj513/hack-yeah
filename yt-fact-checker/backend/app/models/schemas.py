@@ -31,6 +31,19 @@ class UnverifiedReason(str, Enum):
     CLAIM_AMBIGUOUS = "claim_ambiguous"
 
 
+class Technique(str, Enum):
+    """How a passage persuades. Names the method, never the position taken."""
+
+    UNDISCLOSED_AD = "undisclosed_ad"
+    EMOTIONAL_MANIPULATION = "emotional_manipulation"
+    LOADED_LANGUAGE = "loaded_language"
+    LOGICAL_FALLACY = "logical_fallacy"
+    CHERRY_PICKING = "cherry_picking"
+    CONSPIRACY_FRAMING = "conspiracy_framing"
+    POLITICAL_FRAMING = "political_framing"
+    UNFALSIFIABLE = "unfalsifiable"
+
+
 class ClaimType(str, Enum):
     DEFINITIONAL = "definitional"
     STATISTICAL = "statistical"
@@ -134,9 +147,22 @@ class Claim(BaseModel):
         return value
 
 
+class Signal(BaseModel):
+    """A rhetorical observation, anchored to the transcript like a claim."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    quote: str = Field(min_length=1, max_length=2000)
+    startSeconds: float = Field(ge=0)
+    endSeconds: float = Field(ge=0)
+    technique: Technique
+    severity: Literal["low", "medium", "high"] = "low"
+    note: str = Field(min_length=1, max_length=300)
+
+
 class CheckResponse(BaseModel):
     analysisId: str
     status: Literal["complete", "no_transcript", "no_claims", "failed"]
     mode: Literal["demo", "live"] = "live"
     claims: list[Claim] = Field(default_factory=list)
+    signals: list[Signal] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

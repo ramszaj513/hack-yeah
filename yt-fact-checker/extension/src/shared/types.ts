@@ -30,6 +30,45 @@ export type SourceType =
   | "reference"
   | "web";
 
+export type Technique =
+  | "undisclosed_ad"
+  | "emotional_manipulation"
+  | "loaded_language"
+  | "logical_fallacy"
+  | "cherry_picking"
+  | "conspiracy_framing"
+  | "political_framing"
+  | "unfalsifiable";
+
+export interface Signal {
+  id: string;
+  quote: string;
+  startSeconds: number;
+  endSeconds: number;
+  technique: Technique;
+  severity: "low" | "medium" | "high";
+  note: string;
+}
+
+/** Viewer preferences, stored locally. */
+export interface Settings {
+  /** Raise a notice over the player as playback reaches a flagged moment. */
+  popups: boolean;
+  /** Supported claims are already in the video; hiding them leaves the problems. */
+  hideSupported: boolean;
+  /** The rhetorical pass: manipulation, hidden ads, framing. */
+  showSignals: boolean;
+  /** Ignore minor rhetorical observations. */
+  strongSignalsOnly: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  popups: true,
+  hideSupported: false,
+  showSignals: true,
+  strongSignalsOnly: false,
+};
+
 export type AnalysisStatus =
   | "ready"
   | "loading_transcript"
@@ -91,6 +130,7 @@ export interface AnalysisResponse {
   status: "complete" | "no_transcript" | "no_claims" | "failed";
   mode: "demo" | "live";
   claims: Claim[];
+  signals: Signal[];
   warnings: string[];
 }
 
@@ -104,6 +144,7 @@ export interface Progress {
 export type StreamEvent =
   | { type: "status"; status: AnalysisStatus }
   | ({ type: "progress" } & Progress)
+  | { type: "signal"; signal: Signal }
   | { type: "claim"; claim: Claim }
   | { type: "complete"; response: AnalysisResponse }
   | { type: "error"; message: string };
@@ -112,6 +153,7 @@ export interface SessionState {
   video?: VideoMetadata;
   status: AnalysisStatus;
   claims: Claim[];
+  signals: Signal[];
   warnings: string[];
   mode?: "demo" | "live";
   selectedClaimId?: string;
@@ -127,4 +169,6 @@ export type RuntimeMessage =
   | { type: "GET_STATE" }
   | { type: "START_CHECK" }
   | { type: "SEEK_TO"; seconds: number }
-  | { type: "CLEAR_SESSION" };
+  | { type: "CLEAR_SESSION" }
+  | { type: "GET_SETTINGS" }
+  | { type: "SET_SETTINGS"; settings: Settings };

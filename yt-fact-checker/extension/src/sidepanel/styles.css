@@ -37,9 +37,16 @@ a:hover { text-decoration: underline; }
 
 /* ---- header ---- */
 
-.eyebrow { margin: 0 0 4px; color: var(--faint); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
-h1 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.01em; }
-.intro { margin: 10px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+h1 { margin: 0; font-size: 16px; font-weight: 500; letter-spacing: -.01em; }
+.tools { display: flex; gap: 2px; }
+.icon { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 15px; background: transparent; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; }
+.icon:hover { background: #272727; color: var(--text); }
+
+.settings { display: grid; gap: 2px; margin-bottom: 16px; padding: 12px 4px; border-radius: 10px; background: var(--surface); }
+.setting { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; color: var(--text); font-size: 13px; cursor: pointer; }
+.setting:hover { background: #222; }
+.setting input { width: 15px; height: 15px; margin: 0; accent-color: var(--link); cursor: pointer; }
 
 .check { width: 100%; height: 40px; border: 0; border-radius: 20px; color: #0f0f0f; background: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; }
 .check:hover { background: #d9d9d9; }
@@ -49,7 +56,9 @@ h1 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.01em; }
 
 /* ---- status ---- */
 
-.status { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.status { display: grid; gap: 6px; margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.status-label { color: var(--muted); }
+.reason { margin: 8px 0 0; color: var(--faint); font-size: 12px; line-height: 1.5; }
 .status.error { color: var(--false); }
 .status.success { color: var(--text); }
 .warning { margin: 10px 0 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--faint); font-size: 12px; line-height: 1.5; }
@@ -111,6 +120,16 @@ h1 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.01em; }
 
 /* Evidence gathering runs for minutes on a long video; a count and a bar are
    the difference between "working" and "hung". */
-.progress { display: block; margin-top: 8px; color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
-.progress-track { height: 2px; margin-top: 8px; border-radius: 1px; background: var(--line); overflow: hidden; }
+.progress { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.progress-track { height: 2px; border-radius: 1px; background: var(--line); overflow: hidden; }
 .progress-fill { height: 100%; background: var(--link); transition: width .3s ease; }
+
+
+/* ---- rhetorical signals ---- */
+
+/* A separate reading of the video — how it argues, not whether it is right —
+   so it gets its own neutral accent rather than a verdict colour. */
+.claim.signal { border-left-color: #7c8fb5; }
+.claim.signal.severity-high { border-left-color: #a97fd4; }
+.badge.signal { color: #9bb0d6; }
+.claim.signal.severity-high .badge.signal { color: #c4a2e8; }
