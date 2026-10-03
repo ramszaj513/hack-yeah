@@ -1,6 +1,7 @@
 {
   "analysisId": "demo-analysis",
   "status": "complete",
+  "mode": "demo",
   "claims": [
     {
       "id": "demo-false-1",

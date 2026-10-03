@@ -36,22 +36,32 @@ def extract_candidate_claims(segments: list[TranscriptSegment], limit: int = 12)
     keeping the same CandidateClaim contract.
     """
     candidates: list[CandidateClaim] = []
+    joined = ""
+    ranges: list[tuple[int, int, TranscriptSegment]] = []
     for segment in segments:
-        for sentence in _split_sentences(segment.text):
-            normalized = sentence.lower().strip()
-            if len(sentence) < 24 or sentence.endswith("?"):
-                continue
-            if normalized.startswith(OPINION_PREFIXES):
-                continue
-            if not re.search(r"\b(is|are|was|were|has|have|had|means|caused|spent|signed|protects|increased|decreased)\b", normalized):
-                continue
-            candidates.append(
-                CandidateClaim(
-                    text=sentence,
-                    start=segment.start,
-                    end=segment.start + segment.duration,
-                )
+        start = len(joined)
+        joined = f"{joined} {segment.text}".strip()
+        ranges.append((start, len(joined), segment))
+
+    for match in re.finditer(r"[^.!?]+(?:[.!?]|$)", joined):
+        sentence = match.group(0).strip()
+        normalized = sentence.lower().strip()
+        if len(sentence) < 24 or sentence.endswith("?"):
+            continue
+        if normalized.startswith(OPINION_PREFIXES):
+            continue
+        if not re.search(r"\b(is|are|was|were|has|have|had|means|caused|spent|signed|protects|increased|decreased)\b", normalized):
+            continue
+        matching_segments = [item for start, end, item in ranges if end > match.start() and start < match.end()]
+        if not matching_segments:
+            continue
+        candidates.append(
+            CandidateClaim(
+                text=sentence,
+                start=matching_segments[0].start,
+                end=matching_segments[-1].start + matching_segments[-1].duration,
             )
-            if len(candidates) >= limit:
-                return candidates
+        )
+        if len(candidates) >= limit:
+            return candidates
     return candidates

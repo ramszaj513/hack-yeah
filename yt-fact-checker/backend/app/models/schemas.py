@@ -75,5 +75,6 @@ class Claim(BaseModel):
 class CheckResponse(BaseModel):
     analysisId: str
     status: Literal["complete", "no_transcript", "no_claims", "failed"]
+    mode: Literal["demo", "live"] = "live"
     claims: list[Claim] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

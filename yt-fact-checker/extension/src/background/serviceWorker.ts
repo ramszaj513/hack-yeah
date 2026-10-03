@@ -51,10 +51,13 @@ async function checkVideo(video: VideoMetadata, transcript: RuntimeMessage & { t
 
     if (!response.ok) throw new Error(`Backend returned ${response.status}`);
     const result = (await response.json()) as AnalysisResponse;
+    const current = await getState();
+    if (current.video?.id !== video.id) return;
     await setState({
       status: result.status === "complete" ? "complete" : result.status,
       claims: result.claims,
       warnings: result.warnings,
+      mode: result.mode,
       error: undefined,
     });
     await sendMarkers(tabId, result);
@@ -76,7 +79,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   }
 
   if (message.type === "CHECK_STARTED") {
-    void setState({ video: message.video, status: "loading_transcript", claims: [], warnings: [], error: undefined });
+    void setState({ video: message.video, status: "loading_transcript", claims: [], warnings: [], mode: undefined, error: undefined });
     void openSidePanel(sender.tab?.id);
     return false;
   }
@@ -92,9 +95,15 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       status: "no_transcript",
       claims: [],
       warnings: ["This video cannot be checked because no usable transcript is available. Speech-to-text is not used."],
+      mode: "live",
       error: undefined,
     });
     void openSidePanel(sender.tab?.id);
+    return false;
+  }
+
+  if (message.type === "VIDEO_CHANGED") {
+    void setState({ video: message.video ?? undefined, status: message.video ? "ready" : "unsupported", claims: [], warnings: [], mode: undefined, error: undefined, selectedClaimId: undefined });
     return false;
   }
 

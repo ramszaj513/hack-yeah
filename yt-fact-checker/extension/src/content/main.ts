@@ -164,6 +164,7 @@ function handleNavigation(): void {
   const nextId = getVideoId();
   if (nextId === currentVideoId) return;
   currentVideoId = nextId;
+  send({ type: "VIDEO_CHANGED", video: nextId ? getVideoMetadata(nextId) : null });
   clearMarkers();
   if (checkButton) {
     checkButton.remove();
@@ -189,8 +190,8 @@ style.textContent = `
   .ytf-marker-host { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
   .ytf-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 7px; height: 14px; padding: 0; border: 1px solid #fff; border-radius: 3px; pointer-events: auto; cursor: pointer; box-shadow: 0 0 3px #000; }
   .ytf-marker-false { height: 20px; width: 9px; background: #ef4444; }
-  .ytf-marker-potentially_false { height: 16px; width: 8px; background: #f59e0b; }
-  .ytf-marker-misleading { height: 12px; width: 7px; background: #facc15; }
+  .ytf-marker-potentially_false { height: 16px; width: 8px; background: #f59e0b; border-radius: 1px; transform: translate(-50%, -50%) rotate(45deg); }
+  .ytf-marker-misleading { height: 12px; width: 7px; background: #facc15; border-radius: 50%; border-style: dotted; }
 `;
 document.documentElement.append(style);
 

@@ -15,6 +15,7 @@ export type AnalysisStatus =
   | "complete"
   | "no_transcript"
   | "no_claims"
+  | "unsupported"
   | "failed";
 
 export interface TranscriptSegment {
@@ -54,6 +55,7 @@ export interface Claim {
 export interface AnalysisResponse {
   analysisId: string;
   status: "complete" | "no_transcript" | "no_claims" | "failed";
+  mode: "demo" | "live";
   claims: Claim[];
   warnings: string[];
 }
@@ -63,6 +65,7 @@ export interface SessionState {
   status: AnalysisStatus;
   claims: Claim[];
   warnings: string[];
+  mode?: "demo" | "live";
   selectedClaimId?: string;
   error?: string;
 }
@@ -71,6 +74,7 @@ export type RuntimeMessage =
   | { type: "CHECK_STARTED"; video: VideoMetadata }
   | { type: "TRANSCRIPT_READY"; video: VideoMetadata; transcript: TranscriptSegment[] }
   | { type: "NO_TRANSCRIPT"; video: VideoMetadata }
+  | { type: "VIDEO_CHANGED"; video: VideoMetadata | null }
   | { type: "MARKER_CLICK"; claimId: string; startSeconds: number }
   | { type: "GET_STATE" }
   | { type: "START_CHECK" }

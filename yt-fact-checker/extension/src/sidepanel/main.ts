@@ -97,9 +97,14 @@ function render(): void {
     no_transcript: "This video cannot be checked because no usable transcript is available. Speech-to-text is not used.",
     no_claims: "No checkable factual claims were found.",
     failed: state.error ?? "The fact-checking service is unavailable. Try again.",
+    unsupported: "Open a YouTube video to use the checker.",
   };
   status.textContent = statusText[state.status];
   shell.append(status);
+
+  if (state.mode === "demo") {
+    shell.append(textElement("p", "Demo fixture results — these claims are not a live check of the current video.", "warning"));
+  }
 
   for (const warning of state.warnings) shell.append(textElement("p", warning, "warning"));
 

@@ -40,6 +40,7 @@ async def check_video(request: CheckRequest) -> CheckResponse:
         return CheckResponse(
             analysisId=str(uuid4()),
             status="no_transcript",
+            mode="live",
             warnings=["This video cannot be checked because no usable transcript is available. Speech-to-text is not used."],
         )
 
