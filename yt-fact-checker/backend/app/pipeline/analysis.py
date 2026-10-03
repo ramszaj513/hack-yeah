@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from app.models.schemas import CheckRequest, CheckResponse, Claim, Context, Verdict
+from app.models.schemas import CheckRequest, CheckResponse, Claim, Verdict
 from app.pipeline.citations import validate_claim_citations
 from app.pipeline.claims import extract_candidate_claims
 from app.pipeline.context import resolve_context

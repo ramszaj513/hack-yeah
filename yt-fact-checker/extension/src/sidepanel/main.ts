@@ -69,8 +69,17 @@ function render(): void {
   app.replaceChildren();
   const shell = document.createElement("section");
   shell.className = "shell";
-  shell.append(textElement("p", "Evidence-first checks", "eyebrow"));
-  shell.append(textElement("h1", "yt-fact-checker"));
+  const header = document.createElement("div");
+  header.className = "claim-head";
+  const titles = document.createElement("div");
+  titles.append(textElement("p", "Evidence-first checks", "eyebrow"), textElement("h1", "yt-fact-checker"));
+  const privacy = document.createElement("button");
+  privacy.className = "timestamp";
+  privacy.type = "button";
+  privacy.textContent = "Privacy";
+  privacy.addEventListener("click", () => chrome.runtime.openOptionsPage());
+  header.append(titles, privacy);
+  shell.append(header);
   shell.append(textElement("p", "Check factual claims in this YouTube video. Open the sources and decide for yourself.", "intro"));
 
   const check = document.createElement("button");

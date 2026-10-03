@@ -14,6 +14,7 @@ The viewer chooses **Check this video**. The extension uses available English Yo
 - Deterministic demo fixture mode for a reliable hackathon presentation.
 - Heuristic live claim extraction and an optional Google Fact Check Tools provider.
 - Citation URL validation and uncertainty-first verdict handling.
+- Extension privacy settings page with a session-data clear action.
 
 ## Run the backend
 

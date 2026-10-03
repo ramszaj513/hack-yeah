@@ -15,6 +15,10 @@
   "action": {
     "default_title": "Check this YouTube video"
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "side_panel": {
     "default_path": "sidepanel.html"
   },

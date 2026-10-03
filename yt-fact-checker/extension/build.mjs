@@ -22,9 +22,11 @@ await Promise.all([
   build({ ...common, entryPoints: [resolve(root, "src/background/serviceWorker.ts")], outfile: resolve(outDir, "background.js") }),
   build({ ...common, format: "iife", entryPoints: [resolve(root, "src/content/main.ts")], outfile: resolve(outDir, "content.js") }),
   build({ ...common, entryPoints: [resolve(root, "src/sidepanel/main.ts")], outfile: resolve(outDir, "sidepanel.js") }),
+  build({ ...common, entryPoints: [resolve(root, "src/options/main.ts")], outfile: resolve(outDir, "options.js") }),
 ]);
 
 await cp(resolve(root, "src/sidepanel/index.html"), resolve(outDir, "sidepanel.html"));
+await cp(resolve(root, "src/options/index.html"), resolve(outDir, "options.html"));
 await cp(resolve(root, "src/sidepanel/styles.css"), resolve(outDir, "styles.css"));
 await cp(resolve(root, "public/manifest.json"), resolve(outDir, "manifest.json"));
 await writeFile(resolve(outDir, "api-base-url.txt"), apiBaseUrl, "utf8");

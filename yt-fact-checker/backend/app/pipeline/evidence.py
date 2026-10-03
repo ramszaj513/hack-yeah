@@ -2,6 +2,7 @@ import os
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 from dataclasses import dataclass
 
 from app.models.schemas import Evidence, Verdict
@@ -44,14 +45,17 @@ class GoogleFactCheckProvider(EvidenceProvider):
             publisher = (review.get("publisher") or {}).get("name", "Fact Check Tools")
             if not url:
                 continue
-            evidence.append(
-                Evidence(
-                    title=title,
-                    publisher=publisher,
-                    url=url,
-                    sourceType="fact_checker",
+            try:
+                evidence.append(
+                    Evidence(
+                        title=title,
+                        publisher=publisher,
+                        url=url,
+                        sourceType="fact_checker",
+                    )
                 )
-            )
+            except ValidationError:
+                continue
             rating = str(review.get("textualRating", "")).lower()
             if any(word in rating for word in ("false", "incorrect", "wrong")):
                 suggested_verdict = Verdict.FALSE

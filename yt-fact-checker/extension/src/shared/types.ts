@@ -78,4 +78,5 @@ export type RuntimeMessage =
   | { type: "MARKER_CLICK"; claimId: string; startSeconds: number }
   | { type: "GET_STATE" }
   | { type: "START_CHECK" }
-  | { type: "SEEK_TO"; seconds: number };
+  | { type: "SEEK_TO"; seconds: number }
+  | { type: "CLEAR_SESSION" };

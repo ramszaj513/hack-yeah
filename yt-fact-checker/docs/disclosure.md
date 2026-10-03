@@ -17,6 +17,10 @@ The repository contains a new hackathon implementation of the extension and back
 
 The implementation may use an AI coding assistant for design, coding, debugging, and documentation. The team remains responsible for understanding, testing, licensing, security, and factual accuracy. No generated verdict should be treated as authoritative without opening its evidence links.
 
+## Privacy
+
+The extension does not scan videos automatically and does not store browsing history. A check sends only the selected video's identifier, title, description, and available captions to the configured backend. Results live in Chrome session storage until the browser closes or the viewer clears them from the extension's privacy settings.
+
 ## Demo mode
 
 `DEMO_MODE=true` returns the checked-in `fixtures/demo-results.json` response. It is deterministic for presentation reliability and must not be described as a live fact-check of the currently playing video.

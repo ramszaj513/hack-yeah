@@ -62,6 +62,8 @@ async function checkVideo(video: VideoMetadata, transcript: RuntimeMessage & { t
     });
     await sendMarkers(tabId, result);
   } catch (error) {
+    const current = await getState();
+    if (current.video?.id !== video.id) return;
     const message = error instanceof Error ? error.message : "The fact-checking service is unavailable.";
     await setState({ status: "failed", error: message, warnings: [] });
   }
@@ -125,6 +127,11 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       if (tab.id !== undefined) void chrome.tabs.sendMessage(tab.id, message);
     });
     return false;
+  }
+
+  if (message.type === "CLEAR_SESSION") {
+    void chrome.storage.session.set({ state: initialState }).then(() => sendResponse({ ok: true }));
+    return true;
   }
 
   return false;
