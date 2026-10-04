@@ -53,7 +53,7 @@ function setState(next: Partial<SessionState>, runId?: string): Promise<SessionS
     await chrome.storage.session.set({ state });
     if (state.textSelection && state.textRunId && state.sourceTabId !== undefined) {
       void chrome.tabs.sendMessage(state.sourceTabId, { type: "TEXT_CHECK_UPDATE", state,
-        show: current.textRunId !== state.textRunId }, { frameId: 0 }).catch(() => undefined);
+        show: false }, { frameId: 0 }).catch(() => undefined);
     }
     return state;
   });
@@ -269,15 +269,18 @@ async function checkText(selection: TextSelection, tabId?: number): Promise<void
   activeRun = runId;
   selection = { ...selection, text, pageTitle: selection.pageTitle.slice(0, 500), context: selection.context.slice(0, 1500) };
   const valid = text.length >= 30 && text.length <= 3000;
-  await setState({ ...initialState, status: valid ? "extracting_claims" : "failed", video: undefined, textRunId: runId,
+  const startingState: SessionState = { ...initialState, status: valid ? "extracting_claims" : "failed", video: undefined, textRunId: runId,
     textSelection: selection, sourceTabId: tabId, selectedClaimId: undefined,
-    error: valid ? undefined : "Zaznacz od 30 do 3000 znaków.", mode: undefined, progress: undefined }, runId);
+    error: valid ? undefined : "Zaznacz od 30 do 3000 znaków.", mode: undefined, progress: undefined };
+  // Dispatch the loading popup before storage/network work, including when
+  // checking text from the browser's context menu.
+  const popup = tabId === undefined ? Promise.resolve() : chrome.tabs.sendMessage(tabId,
+    { type: "TEXT_CHECK_UPDATE", state: startingState, show: true }, { frameId: 0 });
+  void popup.catch(() => { void openSidePanel(tabId); });
+  await setState(startingState, runId);
   // On protected pages / tabs not refreshed since installation, use the existing
   // results view rather than leaving the context-menu action without feedback.
-  if (tabId !== undefined) {
-    try { await chrome.tabs.sendMessage(tabId, { type: "TEXT_CHECK_PING" }, { frameId: 0 }); }
-    catch { void openSidePanel(tabId); }
-  }
+  await popup.catch(() => undefined);
   if (!valid) return;
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/check/text/stream`, {
