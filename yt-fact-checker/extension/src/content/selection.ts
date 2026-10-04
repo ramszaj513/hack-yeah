@@ -8,27 +8,26 @@ const style = document.createElement("style");
 style.textContent = `
   :host { color-scheme:dark; } * { box-sizing:border-box; }
   [hidden] { display:none!important; }
-  button { font:600 13px/1.4 system-ui,sans-serif; cursor:pointer; }
-  .trigger { padding:10px 15px; border:1px solid #42648b; border-radius:20px; background:#142336; color:#eef6ff; box-shadow:0 4px 18px #0005; }
-  button:focus-visible { outline:3px solid #69b6ff; outline-offset:2px; } button:disabled { cursor:default; opacity:.7; }
+  button { font:500 13px/1.4 Roboto,Arial,sans-serif; cursor:pointer; }
+  button:focus-visible { outline:2px solid #3ea6ff; outline-offset:2px; } button:disabled { cursor:default; opacity:.6; }
   .card { width:min(350px,calc(100vw - 24px)); max-height:calc(100vh - 24px); overflow:auto; padding:18px;
-    background:#151a22; color:#eef3fa; border:1px solid #354051; border-radius:16px; box-shadow:0 10px 36px #0005; font:400 13px/1.55 system-ui,sans-serif; }
-  .top { display:flex; align-items:center; justify-content:space-between; gap:16px; color:#a8b7cc; font-size:11px; letter-spacing:.04em; }
-  .close { border:0; background:transparent; color:#bbc6d5; font-size:22px; padding:0 4px; line-height:1; }
-  h2 { margin:12px 0 8px; font-size:17px; line-height:1.35; font-weight:650; }
-  h2[data-tone=positive] { color:#8ddbb3; } h2[data-tone=caution] { color:#f2cf85; } h2[data-tone=danger] { color:#ffa6a6; }
-  p { margin:0; color:#c6cfdd; } .meta { margin-top:14px; font-size:11px; color:#97a7bd; }
-  .signal { margin-top:10px; font-size:12px; color:#c5b4e8; } .actions { display:flex; gap:8px; margin-top:14px; }
-  .details,.retry { padding:9px 12px; border:1px solid #45546b; border-radius:9px; background:#243247; color:#e9f2ff; }
-  .details { flex:1; } .details:hover,.retry:hover { background:#304461; }
-  .loading { display:flex; align-items:center; gap:9px; margin-top:12px; color:#a9c9f4; font-size:12px; }
-  .spinner { width:14px; height:14px; border:2px solid #425770; border-top-color:#9dc9ff; border-radius:50%; animation:spin .85s linear infinite; flex:none; }
+    background:#0f0f0f; color:#f1f1f1; border:1px solid #2a2a2a; border-radius:12px; box-shadow:0 10px 36px #0009;
+    font:400 13px/1.55 Roboto,Arial,sans-serif; }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:16px; color:#717171; font-size:11px; letter-spacing:.04em; }
+  .close { border:0; background:transparent; color:#909090; font-size:20px; padding:0 4px; line-height:1; }
+  .close:hover { color:#f1f1f1; }
+  h2 { margin:12px 0 8px; font-size:16px; line-height:1.35; font-weight:500; }
+  h2[data-tone=positive] { color:#5fbf8f; } h2[data-tone=caution] { color:#e5a33d; } h2[data-tone=danger] { color:#f05d5d; }
+  p { margin:0; color:#aaaaaa; } .meta { margin-top:14px; font-size:11px; color:#717171; }
+  .signal { margin-top:10px; font-size:12px; color:#9bb0d6; } .actions { display:flex; gap:8px; margin-top:14px; }
+  .details,.retry { padding:8px 12px; border:0; border-radius:16px; background:#272727; color:#f1f1f1; font-weight:500; }
+  .details { flex:1; } .details:hover,.retry:hover { background:#3f3f3f; }
+  .loading { display:flex; align-items:center; gap:9px; margin-top:12px; color:#aaaaaa; font-size:12px; }
+  .spinner { width:14px; height:14px; border:2px solid #2a2a2a; border-top-color:#3ea6ff; border-radius:50%; animation:spin .85s linear infinite; flex:none; }
   @keyframes spin { to { transform:rotate(360deg); } }
   @media(prefers-reduced-motion:reduce) { .spinner { animation:none; } }
 `;
-const trigger = document.createElement("button");
-trigger.className = "trigger"; trigger.type = "button"; trigger.textContent = "Zweryfikuj";
-trigger.title = "Wyślij zaznaczony fragment i jego najbliższy kontekst do analizy";
+
 const card = document.createElement("section");
 card.className = "card"; card.hidden = true;
 card.setAttribute("role", "region"); card.setAttribute("aria-label", "Podsumowanie weryfikacji");
@@ -59,9 +58,9 @@ const details = node("button", "details", "Zobacz szczegóły →"); details.typ
 const retry = node("button", "retry", "Ponów"); retry.type = "button";
 const actions = node("div", "actions"); actions.append(retry, details);
 card.append(top, status, loading, signal, meta, actions);
-root.append(style, trigger, card); document.documentElement.append(host);
+root.append(style, card); document.documentElement.append(host);
 let selection: TextSelection | null = null;
-let timer: ReturnType<typeof setTimeout>;
+let timer: ReturnType<typeof setTimeout> | undefined;
 let runId = "";
 let dismissed = "";
 let cardMode = false;
@@ -83,7 +82,7 @@ function editable(node: Node | null): boolean {
   return Boolean(element?.closest('input, textarea, [contenteditable]:not([contenteditable="false"])'));
 }
 function showSelection(): void {
-  if (cardMode || root.activeElement) return;
+  if (root.activeElement) return;
   const selected = window.getSelection();
   const text = selected?.toString().trim() ?? "";
   if (!selected?.rangeCount || text.length < 30 || editable(selected.anchorNode) || editable(selected.focusNode)) { hide(); return; }
@@ -96,9 +95,9 @@ function showSelection(): void {
   const context = index >= 0 ? `${surrounding.slice(Math.max(0, index - 500), index)}\n[Selected fragment]\n${surrounding.slice(index + text.length, index + text.length + 500)}` : "";
   const url = new URL(location.href); url.search = ""; url.hash = "";
   selection = { text, pageUrl: url.href, pageTitle: document.title.slice(0, 500), context };
-  trigger.disabled = text.length > 3000;
-  trigger.textContent = trigger.disabled ? "Zaznacz maks. 3000 znaków" : "Zweryfikuj";
-  trigger.hidden = false; card.hidden = true; host.style.setProperty("display", "block", "important"); place();
+  // Captured only — nothing is shown until the viewer asks for it from the
+  // right-click menu. A panel that appears on every selection interrupts
+  // reading, which is the opposite of what this is for.
 }
 function render(state: SessionState): void {
   const summary = textSummary(state);
@@ -110,7 +109,7 @@ function render(state: SessionState): void {
   loadingText.textContent = state.progress && state.progress.total > 0
     ? `Analiza w toku: ${state.progress.done}/${state.progress.total}` : "Analiza w toku…";
   retry.hidden = state.status !== "failed"; details.disabled = !runId;
-  card.hidden = false; trigger.hidden = true; cardMode = true;
+  card.hidden = false; cardMode = true;
   const parent = document.fullscreenElement ?? document.documentElement;
   if (host.parentElement !== parent) parent.append(host);
   host.style.setProperty("display", "block", "important"); place();
@@ -124,8 +123,6 @@ function start(): void {
     body.textContent = "Rozszerzenie zostało przeładowane. Odśwież stronę i spróbuj ponownie.";
   });
 }
-trigger.addEventListener("pointerdown", event => event.preventDefault());
-trigger.addEventListener("click", () => { if (!trigger.disabled) start(); });
 retry.addEventListener("click", start);
 closeButton.addEventListener("click", close);
 details.addEventListener("click", () => {
@@ -135,6 +132,14 @@ details.addEventListener("click", () => {
 });
 chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   if (message.type === "TEXT_CHECK_PING") { respond({ ok: true }); return false; }
+  if (message.type === "CHECK_SELECTION") {
+    // Re-read the selection here: the menu hands over the text but not the
+    // range, and the surrounding context is taken from the range.
+    showSelection();
+    if (selection) start();
+    respond({ ok: Boolean(selection) });
+    return false;
+  }
   if (message.type !== "TEXT_CHECK_UPDATE") return false;
   const state = message.state as SessionState;
   if (!state.textRunId || !state.textSelection) return false;
@@ -142,8 +147,6 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   if (runId !== state.textRunId || dismissed === runId) return false;
   render(state); respond({ ok: true }); return false;
 });
-document.addEventListener("selectionchange", () => { clearTimeout(timer); timer = setTimeout(showSelection, 180); });
-document.addEventListener("mouseup", event => { if (event.button === 0 && !event.composedPath().includes(host)) showSelection(); });
 document.addEventListener("pointerdown", event => { if (!event.composedPath().includes(host) && !cardMode) hide(); });
 document.addEventListener("keydown", event => { if (event.key === "Escape") close(); });
 window.addEventListener("scroll", () => { if (!cardMode) hide(); }, true);
