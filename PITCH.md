@@ -140,20 +140,60 @@ side raises the value of something on the viewer's side.
 Because we published the failures. Two true claims called false, the cause
 found and fixed, and the variance reported as a range.
 
-## Choosing the demo video
+## The demo video — decided and tested
 
-What it needs:
-- English or Polish captions (both tested)
-- Mostly accurate with one or two clear errors — a video that is all wrong
-  looks cherry-picked, all right has nothing to show
-- Apolitical. The tool handles politics; a jury argument about politics is a
-  lost pitch
-- Under ~20 minutes, so the markers are not microscopic on the scrubber
+**https://www.youtube.com/watch?v=x5Ulx1VlnbA**
+*Top Supplements for Energy, Detox & Digestion | Nutritional Podcast* — 13.9
+min, 12 claims, 6–7 rhetorical signals. Apolitical, not a well-known presenter,
+so a wrong call costs nothing on stage.
 
-Avoid: myth-debunking videos. They *quote* falsehoods in order to correct
-them, so the markers land on the quotes and the demo reads as the tool being
-wrong.
+It was chosen because it makes both branches do visibly different work.
 
-Good shape: a popular history or science explainer that states facts
-confidently. The Chopin episode produced 12 supported, 1 doubtful and 2
-needing context — a good mix, and nobody argues about Chopin.
+**The facts check out.** The composition of "Par 3", the aloe and senna in
+"Bowel Mover", the cleanse tiers — all supported, verified against the
+manufacturer's own pages, quotes confirmed. The tool is not flagging
+everything.
+
+**The second branch catches what is not said.** Four undisclosed_ad signals,
+three of them high severity — a referral code and a discount delivered as
+friendly advice:
+
+| Time | Signal |
+| --- | --- |
+| 2:25 | `potentially_false` — "after 40 you don't produce enough stomach acid" (PubMed) |
+| 6:38 | `undisclosed_ad`, high — referral code, commercial tie not disclosed |
+| 11:52 | `undisclosed_ad`, high — sale with a discount tied to the presenter |
+| 12:04 | `undisclosed_ad`, high — promotion through a personal discount code |
+
+The line that sells the demo:
+
+> "Everything this person says about the products is true — we checked it
+> against the manufacturer. What they don't say is that there's a referral
+> code. The second pass caught that four times."
+
+That is slide 6's argument — a video can be factually spotless and still be an
+operation — with a live example instead of an assertion.
+
+Scrub to **2:25** for the amber claim marker, then **6:38** for the hidden-ad
+signal, then open the panel to show the product facts holding up.
+
+### Why not the others
+
+Four candidates were run and rejected, each for a reason worth remembering:
+
+- **Myth-debunking videos** quote falsehoods in order to correct them, so the
+  tool argues with the correction. One marked "hair and nails do not grow after
+  death" as false — siding with the myth.
+- **Videos about their own presenter** produce claims like "he worked at the
+  Washington Post": dull and half unverifiable.
+- **A liver-cleanse video** worked but left 4 of 11 claims unresolved.
+
+The shape to look for: confident factual claims about the world, dense with
+numbers and dates, from someone with an incentive.
+
+### Before the demo
+
+`CACHE_ENABLED=true` is already set and the cache is warm for this video:
+59s cold, **8s warm**, identical output. Do not clear it. Without it, two runs
+of the same video returned 12 and 8 claims — the retrieval variance is real,
+and the cache is what makes the stage behave like the rehearsal.
