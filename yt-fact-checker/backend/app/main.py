@@ -10,8 +10,8 @@ from fastapi.responses import StreamingResponse
 
 from app import cache
 from app.config import settings
-from app.models.schemas import CheckRequest, CheckResponse
-from app.pipeline.orchestrator import run_pipeline
+from app.models.schemas import CheckRequest, CheckResponse, TextCheckRequest
+from app.pipeline.orchestrator import run_pipeline, run_text_pipeline
 from app.pipeline.transcript import TranscriptUnavailable, fetch_english_transcript
 
 
@@ -150,3 +150,47 @@ async def check_video_stream(request: CheckRequest) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/api/v1/check/text", response_model=CheckResponse)
+async def check_text(request: TextCheckRequest) -> CheckResponse:
+    # Video fixtures would imply a verdict about unrelated selected text.
+    if settings().demo_mode:
+        return CheckResponse(analysisId=str(uuid4()), status="failed", mode="demo",
+                             warnings=["Text checking requires live mode. Video demo results are not used for selections."])
+    try:
+        return await run_text_pipeline(request)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Text checking failed.") from exc
+
+
+@app.post("/api/v1/check/text/stream")
+async def check_text_stream(request: TextCheckRequest) -> StreamingResponse:
+    async def events() -> AsyncIterator[str]:
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+        async def emit(event: dict) -> None:
+            await queue.put(event)
+
+        async def run() -> None:
+            try:
+                if settings().demo_mode:
+                    response = await check_text(request)
+                else:
+                    response = await run_text_pipeline(request, emit)
+                await emit({"type": "complete", "response": response.model_dump(mode="json")})
+            except Exception:
+                await emit({"type": "error", "message": "Text checking failed. Please try again."})
+            finally:
+                await queue.put(None)
+
+        worker = asyncio.create_task(run())
+        try:
+            while (event := await queue.get()) is not None:
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        finally:
+            worker.cancel()
+            await asyncio.gather(worker, return_exceptions=True)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

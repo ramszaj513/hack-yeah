@@ -25,6 +25,8 @@ from app.models.schemas import (
     TranscriptSegment,
     UnverifiedReason,
     Verdict,
+    VideoMetadata,
+    TextCheckRequest,
 )
 from app.pipeline.anchoring import Anchor, anchor_quote
 from app.pipeline.extraction import ExtractedClaim, extract_claims
@@ -186,10 +188,11 @@ async def _collect_signals(
     segments: list[TranscriptSegment],
     video: VideoMetadata,
     send: Emit,
+    text_context: str | None = None,
 ) -> list[Signal]:
     """Review rhetoric and anchor each signal, emitting as they resolve."""
     try:
-        detected = await detect_signals(segments, video)
+        detected = await detect_signals(segments, video, text_context)
     except LLMUnavailable:
         return []
 
@@ -215,7 +218,18 @@ async def _collect_signals(
     return signals
 
 
-async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> CheckResponse:
+async def run_pipeline(request: CheckRequest, emit: Emit | None = None, *, text_context: str | None = None) -> CheckResponse:
+    tasks: list[asyncio.Task] = []
+    try:
+        return await _run_pipeline(request, emit, text_context=text_context, owned_tasks=tasks)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def _run_pipeline(request: CheckRequest, emit: Emit | None = None, *, text_context: str | None, owned_tasks: list[asyncio.Task]) -> CheckResponse:
     send = emit or _noop
     config = settings()
     analysis_id = str(uuid4())
@@ -248,11 +262,14 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
 
     # Rhetorical review needs no retrieval, so it runs alongside the factual
     # pass rather than adding to the wait.
-    signals_task = asyncio.create_task(_collect_signals(segments, request.video, send))
+    signals_task = asyncio.create_task(_collect_signals(segments, request.video, send, text_context))
+    owned_tasks.append(signals_task)
 
     try:
-        extracted = await extract_claims(segments, request.video)
+        extracted = await extract_claims(segments, request.video, text_context)
     except LLMUnavailable as exc:
+        signals_task.cancel()
+        await asyncio.gather(signals_task, return_exceptions=True)
         return CheckResponse(
             analysisId=analysis_id,
             status="failed",
@@ -264,7 +281,7 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
             analysisId=analysis_id,
             status="no_claims",
             signals=await signals_task,
-            warnings=["No checkable factual claims were found in this video."],
+            warnings=["No checkable factual claims were found in this selection." if text_context is not None else "No checkable factual claims were found in this video."],
         )
 
     await send({"type": "status", "status": "gathering_evidence"})
@@ -284,6 +301,7 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
     # a long video takes minutes, and a status line that never moves for that
     # long is indistinguishable from a hang.
     gathering = [asyncio.create_task(_prepare(item, segments, semaphore)) for item in extracted]
+    owned_tasks.extend(gathering)
     for future in asyncio.as_completed(gathering):
         try:
             result = await future
@@ -314,6 +332,7 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
     # Phase two: decide each claim against its own evidence plus whatever the
     # pool adds, streaming results as they land.
     tasks = [asyncio.create_task(_decide(item, pool, semaphore)) for item in prepared]
+    owned_tasks.extend(tasks)
     decided = 0
     await send({"type": "progress", "stage": "verdicts", "done": 0, "total": len(prepared)})
 
@@ -349,3 +368,16 @@ async def run_pipeline(request: CheckRequest, emit: Emit | None = None) -> Check
         signals=await signals_task,
         warnings=warnings,
     )
+
+
+async def run_text_pipeline(request: TextCheckRequest, emit: Emit | None = None) -> CheckResponse:
+    # Internal adapter reuses retrieval, adjudication and quote verification.
+    # Only selected text becomes anchorable evidence; surrounding context cannot.
+    adapted = CheckRequest(
+        video=VideoMetadata(id="text-selection", title=request.pageTitle, language="auto"),
+        url=str(request.pageUrl or ""),
+        transcript=[TranscriptSegment(text=request.text, start=0, duration=0)],
+    )
+    response = await run_pipeline(adapted, emit, text_context=request.context)
+    response.warnings.append("Only the selected fragment was analysed; surrounding context may change its meaning.")
+    return response

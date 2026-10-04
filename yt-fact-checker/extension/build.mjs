@@ -21,6 +21,7 @@ const common = {
 await Promise.all([
   build({ ...common, entryPoints: [resolve(root, "src/background/serviceWorker.ts")], outfile: resolve(outDir, "background.js") }),
   build({ ...common, format: "iife", entryPoints: [resolve(root, "src/content/main.ts")], outfile: resolve(outDir, "content.js") }),
+  build({ ...common, format: "iife", entryPoints: [resolve(root, "src/content/selection.ts")], outfile: resolve(outDir, "selection.js") }),
   build({ ...common, entryPoints: [resolve(root, "src/sidepanel/main.ts")], outfile: resolve(outDir, "sidepanel.js") }),
   build({ ...common, entryPoints: [resolve(root, "src/options/main.ts")], outfile: resolve(outDir, "options.js") }),
 ]);
