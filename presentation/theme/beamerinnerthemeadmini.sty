@@ -113,20 +113,6 @@
   \end{minipage}\hfill
 }
 
-% ============================================================ placeholder
-\newcommand{\adminiplaceholder}[2]{%
-  \begin{center}%
-  \begin{tikzpicture}
-    \node[
-      draw=adminiline,dashed,line width=0.5pt,inner sep=0pt,
-      minimum width=\linewidth,minimum height=#2,
-      align=center,fill=adminisurface,text=adminifaint,
-      font=\ttfamily\small
-    ] {#1};
-  \end{tikzpicture}%
-  \end{center}%
-}
-
 % ============================================================ title page
 \defbeamertemplate*{title page}{admini}{%
   \begin{tikzpicture}[remember picture,overlay]

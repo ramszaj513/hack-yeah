@@ -1,8 +1,9 @@
-# presentation — the HackYeah Defence deck
+# presentation — the Verifact deck
 
-A Beamer deck built on a small custom theme, `admini`, that borrows the
-extension's own visual language: dark surface, one blue, and verdict colour used
-sparingly. Compiled with pdfLaTeX; no system fonts or `fontspec` are needed.
+A Beamer deck for **Verifact**, the in-video fact-checker built by team admini
+for HackYeah Defence. It is built on a small custom theme, `admini`, that borrows
+the extension's own visual language: dark surface, one blue, and verdict colour
+used sparingly. Compiled with pdfLaTeX; no system fonts or `fontspec` are needed.
 
 ## Build
 
@@ -67,7 +68,6 @@ Body is Roboto; labels, timestamps and tags are Roboto Mono.
 
 \administat{20--21/21}{labelled set}          % a statistic
 \adminicallout[adminisupported]{body}         % left-ruled callout
-\adminiplaceholder{[ screencast ]}{32mm}      % dashed image frame
 ```
 
 Verdict keys: `false`, `doubtful`, `misleading`, `supported`, `neutral`,
@@ -78,9 +78,8 @@ Verdict keys: `false`, `doubtful`, `misleading`, `supported`, `neutral`,
 The pitch script from `PITCH.md` is embedded as `\note{}` in each `sections/`
 file. `make notes` renders them; `make deck` omits them.
 
-## Assets
+## Demo
 
-`04-demo`, and the measured numbers on `07-measurement`, use placeholders and
-figures from `PITCH.md`. Replace the demo frame's `\adminiplaceholder` with a
-real screenshot (drop the image into `assets/` and use
-`\includegraphics[width=\linewidth]{…}`) once the extension UI is captured.
+The demo is shown as a separate video, so `sections/04-demo.tex` carries the
+spoken framing rather than an embedded recording. No image placeholders remain
+in the deck.
