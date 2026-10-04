@@ -9,7 +9,7 @@ used sparingly. Compiled with pdfLaTeX; no system fonts or `fontspec` are needed
 
 ```bash
 make demo    # theme-demo.pdf   — exercises every theme component
-make deck    # main.pdf         — the 10-slide pitch
+make deck    # main.pdf         — the pitch
 make notes   # main-notes.pdf   — the same slides with speaker notes
 make all
 make clean
@@ -29,7 +29,8 @@ theme/
   beamerfontthemeadmini.sty    Roboto + Roboto Mono
   beamerouterthemeadmini.sty   telemetry bar, HUD brackets, scrubber footer
   beamerinnerthemeadmini.sty   claim cards, evidence, callouts, title page
-sections/01-cover … 10-close  one file per slide
+sections/01-cover … 11-close  one file per slide
+business-model.md             reference one-pager behind the business slides
 ```
 
 `main.tex` points Beamer at `theme/` with `\def\input@path{{theme/}}`, so
