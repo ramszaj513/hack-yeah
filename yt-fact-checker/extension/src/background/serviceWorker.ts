@@ -22,7 +22,6 @@ const initialState: SessionState = {
 };
 let activeRun = "";
 let controller: AbortController | undefined;
-let lastTextStart = 0;
 let stateWrites: Promise<unknown> = Promise.resolve();
 
 async function getSettings(): Promise<Settings> {
@@ -52,6 +51,10 @@ function setState(next: Partial<SessionState>, runId?: string): Promise<SessionS
     if (runId !== undefined && activeRun !== runId) return current;
     const state = { ...current, ...next };
     await chrome.storage.session.set({ state });
+    if (state.textSelection && state.textRunId && state.sourceTabId !== undefined) {
+      void chrome.tabs.sendMessage(state.sourceTabId, { type: "TEXT_CHECK_UPDATE", state,
+        show: current.textRunId !== state.textRunId }, { frameId: 0 }).catch(() => undefined);
+    }
     return state;
   });
   stateWrites = write.catch(() => undefined);
@@ -254,28 +257,28 @@ async function checkVideo(
 }
 
 function startText(selection: TextSelection, tabId?: number): void {
-  // Called directly from the click handler to retain the user gesture.
-  void openSidePanel(tabId);
   void checkText(selection, tabId);
 }
 
 async function checkText(selection: TextSelection, tabId?: number): Promise<void> {
   const text = selection.text.trim();
-  if (text.length < 30 || text.length > 3000) {
-    await setState({ error: "Zaznacz od 30 do 3000 znaków.", warnings: ["Zaznacz od 30 do 3000 znaków."] });
-    return;
-  }
-  if (Date.now() - lastTextStart < 1500) return;
-  lastTextStart = Date.now();
   controller?.abort();
   const abort = new AbortController();
   controller = abort;
   const runId = crypto.randomUUID();
   activeRun = runId;
   selection = { ...selection, text, pageTitle: selection.pageTitle.slice(0, 500), context: selection.context.slice(0, 1500) };
-  await setState({ ...initialState, status: "extracting_claims", video: undefined,
+  const valid = text.length >= 30 && text.length <= 3000;
+  await setState({ ...initialState, status: valid ? "extracting_claims" : "failed", video: undefined, textRunId: runId,
     textSelection: selection, sourceTabId: tabId, selectedClaimId: undefined,
-    error: undefined, mode: undefined, progress: undefined }, runId);
+    error: valid ? undefined : "Zaznacz od 30 do 3000 znaków.", mode: undefined, progress: undefined }, runId);
+  // On protected pages / tabs not refreshed since installation, use the existing
+  // results view rather than leaving the context-menu action without feedback.
+  if (tabId !== undefined) {
+    try { await chrome.tabs.sendMessage(tabId, { type: "TEXT_CHECK_PING" }, { frameId: 0 }); }
+    catch { void openSidePanel(tabId); }
+  }
+  if (!valid) return;
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/check/text/stream`, {
       method: "POST", signal: abort.signal, headers: { "Content-Type": "application/json" },
@@ -284,6 +287,9 @@ async function checkText(selection: TextSelection, tabId?: number): Promise<void
     if (!response.ok) throw new Error(`Text check returned ${response.status}`);
     if (!response.body) throw new Error("No response stream.");
     await readStream(response.body, event => applyEvent(event, runId, tabId, true));
+    const final = await getState();
+    if (activeRun === runId && !["complete", "no_claims", "failed"].includes(final.status))
+      throw new Error("Połączenie przerwano przed zakończeniem analizy.");
   } catch (error) {
     if (!(await stillCurrent(runId))) return;
     await setState({ status: "failed", error: error instanceof Error ? error.message : "Text check unavailable.", progress: undefined }, runId);
@@ -315,6 +321,15 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
+  if (message.type === "OPEN_TEXT_DETAILS") {
+    if (activeRun && activeRun !== message.runId) {
+      sendResponse({ error: "Uruchomiono już inną analizę. Sprawdź fragment ponownie." });
+    } else {
+      void openSidePanel(sender.tab?.id);
+      sendResponse({ ok: true });
+    }
+    return false;
+  }
   if (message.type === "CHECK_TEXT") {
     startText(message.selection, sender.tab?.id);
     return false;

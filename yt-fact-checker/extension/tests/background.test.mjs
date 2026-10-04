@@ -42,14 +42,22 @@ function harness() {
   return { listeners, store, requests, calls, send, complete, advance() { now += 2000; } };
 }
 
-test("panel opens during click before the network request and text uses its own endpoint", async () => {
+test("text checking shows the inline card without opening the panel", async () => {
   const h = harness();
   h.send({ type: "CHECK_TEXT", selection });
-  assert.equal(h.calls[0], "open");
   await flush();
+  assert.equal(h.calls.includes("open"), false);
   assert.match(h.requests[0].url, /\/check\/text\/stream$/);
   assert.deepEqual(JSON.parse(h.requests[0].options.body), selection);
   assert.equal(h.store.state.video, undefined);
+});
+
+test("details open the panel from the user's click", async () => {
+  const h = harness();
+  h.send({ type: "CHECK_TEXT", selection });
+  await flush();
+  h.send({ type: "OPEN_TEXT_DETAILS", runId: h.store.state.textRunId });
+  assert.equal(h.calls.includes("open"), true);
 });
 
 test("new selection cancels the old request and ignores stale results", async () => {

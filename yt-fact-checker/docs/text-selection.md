@@ -9,14 +9,14 @@ Branch: `codex/selected-text-check`.
 3. W `chrome://extensions` przeładuj rozszerzenie załadowane z `extension/dist`, a następnie odśwież strony. Rozszerzenie wymaga teraz dostępu do treści zwykłych stron HTTP/HTTPS, żeby wyświetlać przycisk przy zaznaczeniu.
 4. Zaznacz od 30 do 3000 znaków. Kliknij przycisk „Zweryfikuj” albo użyj prawego przycisku myszy i opcji „Zweryfikuj zaznaczony tekst”.
 
-W panelu są cytat, strona pochodzenia, wyniki poszczególnych twierdzeń, źródła i obserwacje dotyczące argumentacji. Można ponowić sprawdzenie lub skopiować wynik. Wyjaśnienia z dotychczasowego pipeline'u mogą być po angielsku.
+Najpierw przy zaznaczeniu pojawia się krótka karta: postęp, a po zakończeniu ocena wyników, maksymalnie dwa zdania podsumowania oraz liczba twierdzeń i unikalnych adresów źródeł. Sygnały perswazji są wskazywane osobno. Podsumowanie jest wyliczane z wyników weryfikacji i nie wymaga dodatkowego zapytania do modelu. „Zobacz szczegóły” otwiera panel z cytatem, źródłami i uzasadnieniami. Karta zamyka się przez × lub Escape i nie otwiera się ponownie przy kolejnych wynikach tej samej analizy. Jeśli strona nie obsługuje karty, otwierany jest widok szczegółowy. Wyjaśnienia z dotychczasowego pipeline'u mogą być po angielsku.
 
 ## Zakres i ograniczenia
 
 - Sprawdzenie uruchamia dopiero kliknięcie. Przycisk wysyła zaznaczenie, tytuł, URL bez parametrów i fragmentu oraz do 500 znaków przed i po zaznaczeniu. Menu kontekstowe wysyła zaznaczenie i metadane bez dodatkowego kontekstu.
 - Otaczający tekst pomaga interpretować wypowiedź; twierdzenia i sygnały muszą pochodzić z samego zaznaczenia. Nieznana data publikacji nie jest zastępowana dzisiejszą datą.
 - Zaznaczenia w edytowalnych polach są pomijane. Przycisk działa na zwykłych stronach, poza stronami chronionymi przez przeglądarkę. Nie obejmuje tekstu rysowanego w canvas, skanów ani zamkniętych shadow roots. Wbudowany czytnik PDF nie jest objęty gwarancją działania.
-- Nowe sprawdzenie przerywa poprzednie i odrzuca jego spóźnione wyniki. Obowiązuje krótki odstęp między kliknięciami. Cache etapów korzysta z istniejącego `CACHE_ENABLED`; nie dodano trwałej historii zaznaczeń.
+- Nowe sprawdzenie przerywa poprzednie i odrzuca jego spóźnione wyniki. Cache etapów korzysta z istniejącego `CACHE_ENABLED`; nie dodano trwałej historii zaznaczeń.
 - Pewność jest oceną modelu, nie skalibrowanym prawdopodobieństwem. Brak źródeł nie oznacza fałszu; technika retoryczna nie oznacza fałszu.
 
 ## Sprawdzenie
