@@ -1,0 +1,36 @@
+% main.tex — the pitch deck. Build with `make deck` (clean) or `make notes`
+% (slides + speaker notes). Theme lives in theme/; each slide in sections/.
+\makeatletter
+\def\input@path{{theme/}}
+\makeatother
+\documentclass[aspectratio=169,11pt]{beamer}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usetheme{admini}
+\setbeamertemplate{navigation symbols}{}
+
+% main-notes.tex defines \shownotes before \input-ting this file.
+\makeatletter
+\@ifundefined{shownotes}{}{\setbeameroption{show notes}}
+\makeatother
+
+\title{Check it while you watch}
+\subtitle{In-video fact-checking with verified citations}
+\author{team admini}
+\institute{yt-fact-checker\ \textperiodcentered\ HackYeah Defence 2026}
+\date{}
+
+\begin{document}
+
+\input{sections/01-cover}
+\input{sections/02-gap}
+\input{sections/03-defence}
+\input{sections/04-demo}
+\input{sections/05-innovation}
+\input{sections/06-rhetoric}
+\input{sections/07-measurement}
+\input{sections/08-prior-art}
+\input{sections/09-business}
+\input{sections/10-close}
+
+\end{document}

@@ -1,0 +1,40 @@
+% Beamerfonttheme admini — Roboto for the body (the extension's own typeface)
+% and Roboto Mono for telemetry, timestamps, tags and verdict labels, which is
+% what gives the deck its terminal / intel-brief register.
+%
+% Both fonts ship with TeX Live, so this compiles under pdfLaTeX with no
+% system font installation and no fontspec.
+\ProvidesPackage{beamerfontthemeadmini}
+
+\RequirePackage[sfdefault,lining,proportional]{roboto}
+\RequirePackage{roboto-mono}
+
+\renewcommand{\familydefault}{\sfdefault}
+
+% ---- structural type ----
+\setbeamerfont{title}{family=\sffamily,size=\fontsize{31}{35}\selectfont,series=\bfseries}
+\setbeamerfont{subtitle}{family=\sffamily,size=\fontsize{13}{17}\selectfont}
+\setbeamerfont{author}{family=\ttfamily,size=\fontsize{10}{13}\selectfont}
+\setbeamerfont{institute}{family=\ttfamily,size=\fontsize{9}{12}\selectfont}
+\setbeamerfont{date}{family=\ttfamily,size=\fontsize{9}{12}\selectfont}
+
+\setbeamerfont{frametitle}{family=\sffamily,size=\fontsize{20}{24}\selectfont,series=\bfseries}
+\setbeamerfont{framesubtitle}{family=\sffamily,size=\fontsize{11}{14}\selectfont}
+
+% ---- telemetry / labels ----
+\setbeamerfont{admini telemetry}{family=\ttfamily,size=\fontsize{7.5}{9}\selectfont}
+\setbeamerfont{admini kicker}{family=\ttfamily,size=\fontsize{9}{11}\selectfont,series=\bfseries}
+\setbeamerfont{admini mono}{family=\ttfamily,size=\fontsize{9}{12}\selectfont}
+\setbeamerfont{admini tag}{family=\ttfamily,size=\fontsize{8}{10}\selectfont}
+\setbeamerfont{admini stat}{family=\sffamily,size=\fontsize{19}{23}\selectfont,series=\bfseries}
+\setbeamerfont{admini lead}{family=\sffamily,size=\fontsize{13}{17}\selectfont}
+\setbeamerfont{admini pull}{family=\sffamily,size=\fontsize{16}{21}\selectfont,series=\bfseries}
+\setbeamerfont{admini quote}{family=\sffamily,size=\fontsize{9.5}{13}\selectfont}
+
+% ---- body ----
+\setbeamerfont{normal text}{family=\sffamily,size=\fontsize{11}{15}\selectfont}
+\setbeamerfont{itemize/enumerate body}{family=\sffamily,size=\fontsize{11}{15}\selectfont}
+\setbeamerfont{itemize/enumerate subbody}{family=\sffamily,size=\fontsize{10}{13}\selectfont}
+\setbeamerfont{block title}{family=\sffamily,size=\fontsize{11}{13}\selectfont,series=\bfseries}
+\setbeamerfont{block body}{family=\sffamily,size=\fontsize{10.5}{14}\selectfont}
+\setbeamerfont{caption}{family=\ttfamily,size=\fontsize{8}{10}\selectfont}

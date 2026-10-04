@@ -1,0 +1,74 @@
+% Beameroutertheme admini — the subtle "cyber defence" layer. It reads as an
+% intel briefing screen without adding a single colour the app does not use:
+%   * a telemetry bar carrying a brand tag and a slide code,
+%   * corner brackets framing the content area,
+%   * a YouTube-style scrubber along the bottom that doubles as progress.
+% No scanlines, no grid, no animation.
+\ProvidesPackage{beamerouterthemeadmini}
+
+\RequirePackage{tikz}
+\usetikzlibrary{calc}
+\RequirePackage{etoolbox}
+
+% Margins leave room for the brackets.
+\setbeamersize{text margin left=10mm,text margin right=10mm}
+
+% ---------------------------------------------------------------- telemetry
+\defbeamertemplate*{headline}{admini}{%
+  \leavevmode%
+  \begin{beamercolorbox}[wd=\paperwidth,ht=3.5mm,dp=2.5mm,leftskip=10mm,rightskip=10mm]{}%
+    {\usebeamerfont{admini telemetry}\usebeamercolor[fg]{admini telemetry}%
+      \textcolor{adminitext}{ADMINI}\ \textcolor{adminifaint}{//}\ \textcolor{adminifaint}{DEFENCE}%
+      \hfill
+      \textcolor{adminifaint}{SLIDE}\ \textcolor{adminitext}{\insertframenumber\,/\,\inserttotalframenumber}%
+    }%
+  \end{beamercolorbox}%
+}
+
+% ---------------------------------------------------------------- scrubber
+% Drawn as an overlay so it can span the full paper width without fighting
+% beamer's margins; the vbox reserves the vertical space it occupies.
+\defbeamertemplate*{footline}{admini}{%
+  \vbox to 4.5mm{%
+    \vfil
+    \begin{tikzpicture}[remember picture,overlay]
+      \pgfmathsetmacro{\adminiprog}{(\insertframenumber-1)/max(\inserttotalframenumber-1,1)}
+      \fill[adminiline]
+        ($(current page.south west)+(0,2.2mm)$) rectangle ++(\paperwidth,0.3mm);
+      \fill[adminilink]
+        ($(current page.south west)+(0,2.2mm)$) rectangle ++(\adminiprog*\paperwidth,0.3mm);
+      \fill[adminitext]
+        ($(current page.south west)+(\adminiprog*\paperwidth,2.35mm)$) circle (0.9mm);
+    \end{tikzpicture}%
+  }%
+}
+
+% ----------------------------------------------------------- hud brackets
+\setbeamertemplate{background}{%
+  \begin{tikzpicture}[remember picture,overlay]
+    \def\off{7mm}
+    \def\bot{8mm}
+    \def\len{6mm}
+    \draw[adminiline,line width=0.5pt]
+      ($(current page.north west)+(\off,-\off)$)        -- ++(\len,0)
+      ($(current page.north west)+(\off,-\off)$)        -- ++(0,-\len)
+      ($(current page.north east)+(-\off,-\off)$)       -- ++(-\len,0)
+      ($(current page.north east)+(-\off,-\off)$)       -- ++(0,-\len)
+      ($(current page.south west)+(\off,\bot)$)         -- ++(\len,0)
+      ($(current page.south west)+(\off,\bot)$)         -- ++(0,\len)
+      ($(current page.south east)+(-\off,\bot)$)        -- ++(-\len,0)
+      ($(current page.south east)+(-\off,\bot)$)        -- ++(0,\len);
+  \end{tikzpicture}%
+}
+
+% ----------------------------------------------------------- frame title
+\setbeamertemplate{frametitle}{%
+  \vskip2mm%
+  \begin{beamercolorbox}[wd=\paperwidth,leftskip=10mm,rightskip=10mm,sep=0pt]{frametitle}%
+    \usebeamerfont{frametitle}\usebeamercolor[fg]{frametitle}\insertframetitle%
+    \ifdefempty{\insertframesubtitle}{}{%
+      \\[1.4mm]{\usebeamerfont{framesubtitle}\usebeamercolor[fg]{framesubtitle}\insertframesubtitle}%
+    }%
+  \end{beamercolorbox}%
+  \vskip1mm%
+}

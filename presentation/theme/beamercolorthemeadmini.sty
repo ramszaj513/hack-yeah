@@ -1,0 +1,63 @@
+% Beamercolortheme admini — palette lifted from the extension's side panel
+% (yt-fact-checker/extension/src/sidepanel/styles.css) so the deck and the
+% product share one visual language: dark surface, one blue, verdict colour
+% used sparingly.
+\ProvidesPackage{beamercolorthemeadmini}
+
+\RequirePackage{xcolor}
+
+% ---- core surface / type ----
+\definecolor{adminibg}{HTML}{0F0F0F}
+\definecolor{adminisurface}{HTML}{181818}
+\definecolor{adminisurfacealt}{HTML}{202020}
+\definecolor{adminiline}{HTML}{2A2A2A}
+\definecolor{adminilinesoft}{HTML}{202020}
+\definecolor{adminitext}{HTML}{F1F1F1}
+\definecolor{adminimuted}{HTML}{AAAAAA}
+\definecolor{adminifaint}{HTML}{717171}
+\definecolor{adminilink}{HTML}{3EA6FF}
+
+% ---- verdict colours ----
+\definecolor{adminifalse}{HTML}{F05D5D}
+\definecolor{adminidoubtful}{HTML}{E5A33D}
+\definecolor{adminimisleading}{HTML}{D9C04A}
+\definecolor{adminisupported}{HTML}{5FBF8F}
+\definecolor{adminineutral}{HTML}{8B8B8B}
+
+% ---- rhetorical signal ----
+\definecolor{adminisignal}{HTML}{7C8FB5}
+\definecolor{adminisignalhigh}{HTML}{A97FD4}
+
+% ================= beamer colours =================
+\setbeamercolor{background canvas}{bg=adminibg}
+\setbeamercolor{normal text}{fg=adminitext,bg=adminibg}
+\setbeamercolor{structure}{fg=adminilink}
+\setbeamercolor{alerted text}{fg=adminifalse}
+\setbeamercolor{example text}{fg=adminisupported}
+
+\setbeamercolor{title}{fg=adminitext}
+\setbeamercolor{subtitle}{fg=adminimuted}
+\setbeamercolor{author}{fg=adminimuted}
+\setbeamercolor{institute}{fg=adminifaint}
+\setbeamercolor{date}{fg=adminifaint}
+
+\setbeamercolor{frametitle}{fg=adminitext,bg=adminibg}
+\setbeamercolor{framesubtitle}{fg=adminimuted}
+\setbeamercolor{headline}{fg=adminimuted,bg=adminibg}
+\setbeamercolor{footline}{fg=adminifaint,bg=adminibg}
+\setbeamercolor{admini telemetry}{fg=adminimuted,bg=adminibg}
+
+\setbeamercolor{itemize item}{fg=adminilink}
+\setbeamercolor{itemize subitem}{fg=adminifaint}
+\setbeamercolor{itemize subsubitem}{fg=adminifaint}
+\setbeamercolor{enumerate item}{fg=adminilink}
+
+\setbeamercolor{block title}{fg=adminitext,bg=adminisurface}
+\setbeamercolor{block body}{fg=adminimuted,bg=adminisurface}
+\setbeamercolor{block title example}{fg=adminitext,bg=adminisurface}
+\setbeamercolor{block body example}{fg=adminimuted,bg=adminisurface}
+\setbeamercolor{block title alerted}{fg=adminitext,bg=adminisurface}
+\setbeamercolor{block body alerted}{fg=adminimuted,bg=adminisurface}
+
+\setbeamercolor{caption name}{fg=adminifaint}
+\setbeamercolor{page number in head/foot}{fg=adminifaint}

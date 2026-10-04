@@ -1,0 +1,73 @@
+% theme-demo.tex — exercises every component of the admini theme so the look
+% can be reviewed before any pitch content is written. Build with:
+%   make demo
+\makeatletter
+\def\input@path{{theme/}}
+\makeatother
+\documentclass[aspectratio=169,11pt]{beamer}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usetheme{admini}
+\setbeamertemplate{navigation symbols}{}
+
+\title{Check it while you watch}
+\subtitle{In-video fact-checking with verified citations}
+\author{team admini}
+\institute{yt-fact-checker\ \textperiodcentered\ HackYeah Defence 2026}
+
+\begin{document}
+
+\begin{frame}[plain,noframenumbering]
+  \titlepage
+\end{frame}
+
+\begin{frame}{Theme components}
+  \adminikicker{component check}
+  \vspace{2mm}
+  \begin{itemize}
+    \item Body text uses Roboto, the extension's own typeface.
+    \item Telemetry, timestamps and tags use Roboto Mono.
+  \end{itemize}
+  \vspace{3mm}
+  \begin{claimcard}{false}{02:13}
+    The video states a claim that the evidence contradicts.
+    \begin{evidence}
+      \evidencerow{National Archives}{reference}{A quoted span confirming the check}{yes}
+    \end{evidence}
+  \end{claimcard}
+\end{frame}
+
+\begin{frame}{Verdict rules}
+  \adminikicker{one colour per claim}
+  \vspace{3mm}
+  \begin{claimcard}{supported}{04:02}
+    A claim that checks out against two independent sources.
+  \end{claimcard}
+  \begin{claimcard}{doubtful}{07:41}
+    A claim that survives one source but not a second.
+  \end{claimcard}
+  \begin{claimcard}{misleading}{11:05}
+    A real figure without the base rate that gives it meaning.
+  \end{claimcard}
+\end{frame}
+
+\begin{frame}{Callouts and stats}
+  \adminikicker{innovation}
+  \begin{itemize}
+    \item A plain bullet with a link colour marker.
+  \end{itemize}
+  \adminicallout[adminisupported]{Every cited page is fetched and the quoted
+    line is string-matched against it. A definitive verdict whose citations do
+    not check out is downgraded before it is shown.}
+  \vspace{4mm}
+  \administat{20--21/21}{labelled set}
+  \administat{14.2\,s $\rightarrow$ 3.0\,s}{cache, cold to warm}
+  \administat{8 techniques}{6 evidence sources}
+\end{frame}
+
+\begin{frame}{Placeholders}
+  \adminikicker{demo}
+  \adminiplaceholder{[ side panel screenshot ]}{52mm}
+\end{frame}
+
+\end{document}

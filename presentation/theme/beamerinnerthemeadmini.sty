@@ -1,0 +1,159 @@
+% Beamerinnertheme admini — content components that mirror the extension's
+% side panel: a claim card with a single verdict-coloured left rule, an
+% evidence block with a "quote checked" tag, and a title page carrying the
+% product's own scrubber motif.
+\ProvidesPackage{beamerinnerthemeadmini}
+
+\RequirePackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\RequirePackage{etoolbox}
+\RequirePackage{amssymb}
+
+% ============================================================ annotations
+
+% Kicker: a mono, uppercase, blue label — the intel-brief register.
+\newcommand{\adminikicker}[1]{%
+  {\usebeamerfont{admini kicker}\color{adminilink}\MakeUppercase{#1}}%
+}
+
+% A quiet caption under a component.
+\newcommand{\adminicaption}[1]{%
+  {\usebeamerfont{admini tag}\color{adminifaint}#1}%
+}
+
+% A lead sentence and a pull quote.
+\newcommand{\adminilead}[1]{%
+  {\usebeamerfont{admini lead}\color{adminimuted}#1}\par%
+}
+\newcommand{\adminipull}[1]{%
+  {\usebeamerfont{admini pull}\color{adminitext}#1}\par%
+}
+% A source line, set apart from the claim it supports.
+\newcommand{\adminisource}[1]{%
+  {\usebeamerfont{admini tag}\color{adminifaint}#1}\par%
+}
+
+% Verdict labels, addressed by key.
+\expandafter\def\csname adminiv@false\endcsname{False}
+\expandafter\def\csname adminiv@doubtful\endcsname{Doubtful}
+\expandafter\def\csname adminiv@misleading\endcsname{Misleading}
+\expandafter\def\csname adminiv@supported\endcsname{Checks out}
+\expandafter\def\csname adminiv@neutral\endcsname{Unverified}
+\expandafter\def\csname adminiv@signal\endcsname{Signal}
+
+% ============================================================ claim card
+% \begin{claimcard}{false}{02:13} ... \end{claimcard}
+\newenvironment{claimcard}[2]{%
+  \par\vspace{1.0mm}%
+  \colorlet{adminiv}{admini#1}%
+  \begin{tcolorbox}[
+      enhanced,breakable,
+      colback=adminisurface,colframe=adminisurface,
+      boxrule=0pt,sharp corners,
+      left=3.2mm,right=3.2mm,top=1.9mm,bottom=1.9mm,
+      borderline west={2pt}{0pt}{adminiv},
+      before skip=0pt,after skip=0pt
+    ]%
+  \noindent{\usebeamerfont{admini mono}\color{adminiv}\csname adminiv@#1\endcsname}%
+  \hfill{\usebeamerfont{admini tag}\color{adminifaint}#2}%
+  \par\vspace{0.9mm}%
+  \usebeamerfont{normal text}\color{adminitext}%
+}{%
+  \end{tcolorbox}%
+  \par\vspace{0.2mm}%
+}
+
+% ============================================================ evidence
+\newenvironment{evidence}{%
+  \par\vspace{1.6mm}%
+  \begin{tcolorbox}[
+      enhanced,breakable,
+      colback=adminibg,colframe=adminibg,
+      boxrule=0pt,sharp corners,
+      left=0pt,right=0pt,top=2mm,bottom=0pt,
+      borderline north={0.4pt}{0pt}{adminiline},
+      before skip=0pt,after skip=0pt
+    ]%
+  {\usebeamerfont{admini tag}\color{adminifaint}EVIDENCE}\par\vspace{1.4mm}%
+}{%
+  \end{tcolorbox}%
+}
+% \evidencerow{publisher}{source type}{quoted span}{yes|no|none}
+\newcommand{\evidencerow}[4]{%
+  \noindent{\usebeamerfont{admini mono}\color{adminilink}#1}%
+  \hfill{\usebeamerfont{admini tag}\color{adminifaint}#2}%
+  \ifdefstring{#4}{yes}{~{\usebeamerfont{admini tag}\color{adminisupported}\checkmark\ \textcolor{adminisupported}{quote checked}}}{}%
+  \ifdefstring{#4}{no}{~{\usebeamerfont{admini tag}\color{adminifalse}quote not found}}{}%
+  \par\vspace{0.7mm}%
+  {\usebeamerfont{admini quote}\color{adminifaint}``#3''}\par\vspace{1.3mm}%
+}
+
+% ============================================================ callout
+% \adminicallout[adminilink]{text}
+\newcommand{\adminicallout}[2][adminilink]{%
+  \par\vspace{1mm}%
+  \begin{tcolorbox}[
+      enhanced,breakable,
+      colback=adminisurface,colframe=adminisurface,
+      boxrule=0pt,sharp corners,
+      left=4mm,right=3.4mm,top=3.2mm,bottom=3.2mm,
+      borderline west={3pt}{0pt}{#1},
+      before skip=0pt,after skip=0pt
+    ]%
+  \usebeamerfont{block body}\color{adminimuted}#2%
+  \end{tcolorbox}%
+  \par\vspace{1mm}%
+}
+
+% ============================================================ stat
+\newcommand{\administat}[2]{%
+  \begin{minipage}[t]{0.30\linewidth}%
+    {\usebeamerfont{admini stat}\color{adminitext}#1}\par\vspace{0.8mm}%
+    {\usebeamerfont{admini tag}\color{adminifaint}\MakeUppercase{#2}}%
+  \end{minipage}\hfill
+}
+
+% ============================================================ placeholder
+\newcommand{\adminiplaceholder}[2]{%
+  \begin{center}%
+  \begin{tikzpicture}
+    \node[
+      draw=adminiline,dashed,line width=0.5pt,inner sep=0pt,
+      minimum width=\linewidth,minimum height=#2,
+      align=center,fill=adminisurface,text=adminifaint,
+      font=\ttfamily\small
+    ] {#1};
+  \end{tikzpicture}%
+  \end{center}%
+}
+
+% ============================================================ title page
+\defbeamertemplate*{title page}{admini}{%
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[adminilink]
+      ($(current page.north west)+(16mm,-13mm)$) rectangle ++(32mm,0.6mm);
+    \coordinate (adminiL) at ($(current page.south west)+(16mm,17.2mm)$);
+    \coordinate (adminiR) at ($(current page.south east)+(-16mm,17.2mm)$);
+    \draw[adminiline,line width=0.4mm] (adminiL) -- (adminiR);
+    \foreach \p/\c in {%
+      0.13/adminisupported,0.30/adminisupported,0.46/adminimisleading,
+      0.58/adminidoubtful,0.67/adminifalse,0.82/adminisupported}{%
+      \fill[\c] ($(adminiL)!\p!(adminiR)$) circle (1.3mm);
+    }
+  \end{tikzpicture}%
+  \vspace*{10mm}%
+  \begin{beamercolorbox}[wd=\paperwidth,leftskip=16mm,rightskip=16mm,sep=0pt]{}%
+    {\usebeamerfont{admini kicker}\color{adminilink}HACKYEAH\ \textcolor{adminifaint}{//}\ DEFENCE\ 2026}\\[8mm]%
+    {\usebeamerfont{title}\color{adminitext}\inserttitle}\\[5mm]%
+    {\usebeamerfont{subtitle}\color{adminimuted}\insertsubtitle}\\[12mm]%
+    {\usebeamerfont{author}\color{adminimuted}\insertauthor}\\[1.6mm]%
+    {\usebeamerfont{institute}\color{adminifaint}\insertinstitute}%
+  \end{beamercolorbox}%
+  \vfill
+}
+
+% ============================================================ bullets
+\setbeamertemplate{itemize item}{\color{adminilink}\rule[0.28ex]{1.3mm}{0.4mm}}
+\setbeamertemplate{itemize subitem}{\color{adminifaint}\rule[0.28ex]{1.0mm}{0.35mm}}
+\setbeamertemplate{itemize subsubitem}{\color{adminifaint}\rule[0.28ex]{0.8mm}{0.3mm}}
+\setbeamertemplate{enumerate item}{\usebeamerfont{admini mono}\color{adminilink}\insertenumlabel.}
