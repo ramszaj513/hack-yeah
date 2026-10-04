@@ -8,6 +8,7 @@ import type {
   StreamEvent,
   TranscriptSegment,
   VideoMetadata,
+  TextSelection,
 } from "../shared/types";
 import { DEFAULT_SETTINGS } from "../shared/types";
 
@@ -19,6 +20,9 @@ const initialState: SessionState = {
   signals: [],
   warnings: [],
 };
+let activeRun = "";
+let controller: AbortController | undefined;
+let stateWrites: Promise<unknown> = Promise.resolve();
 
 async function getSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get("settings");
@@ -41,11 +45,20 @@ async function setSettings(settings: Settings): Promise<Settings> {
   return settings;
 }
 
-async function setState(next: Partial<SessionState>): Promise<SessionState> {
-  const current = await chrome.storage.session.get("state");
-  const state = { ...((current.state as SessionState | undefined) ?? initialState), ...next };
-  await chrome.storage.session.set({ state });
-  return state;
+function setState(next: Partial<SessionState>, runId?: string): Promise<SessionState> {
+  const write = stateWrites.then(async () => {
+    const current = await getState();
+    if (runId !== undefined && activeRun !== runId) return current;
+    const state = { ...current, ...next };
+    await chrome.storage.session.set({ state });
+    if (state.textSelection && state.textRunId && state.sourceTabId !== undefined) {
+      void chrome.tabs.sendMessage(state.sourceTabId, { type: "TEXT_CHECK_UPDATE", state,
+        show: false }, { frameId: 0 }).catch(() => undefined);
+    }
+    return state;
+  });
+  stateWrites = write.catch(() => undefined);
+  return write;
 }
 
 async function getState(): Promise<SessionState> {
@@ -102,25 +115,25 @@ async function sendMarkers(
 }
 
 /** True while the user is still on the video this analysis was started for. */
-async function stillCurrent(videoId: string): Promise<boolean> {
-  const current = await getState();
-  return current.video?.id === videoId;
+async function stillCurrent(runId: string): Promise<boolean> {
+  return activeRun === runId;
 }
 
 async function applyEvent(
   event: StreamEvent,
-  video: VideoMetadata,
+  runId: string,
   tabId: number | undefined,
+  textMode = false,
 ): Promise<void> {
-  if (!(await stillCurrent(video.id))) return;
+  if (!(await stillCurrent(runId))) return;
 
   if (event.type === "status") {
-    await setState({ status: event.status, progress: undefined });
+    await setState({ status: event.status, progress: undefined }, runId);
     return;
   }
 
   if (event.type === "progress") {
-    await setState({ progress: { stage: event.stage, done: event.done, total: event.total } });
+    await setState({ progress: { stage: event.stage, done: event.done, total: event.total } }, runId);
     return;
   }
 
@@ -129,8 +142,8 @@ async function applyEvent(
     // instead of showing nothing until the slowest claim finishes.
     const current = await getState();
     const claims = [...current.claims, event.claim].sort((a, b) => a.startSeconds - b.startSeconds);
-    await setState({ claims });
-    await sendMarkers(tabId, claims, current.signals ?? []);
+    await setState({ claims }, runId);
+    if (!textMode) await sendMarkers(tabId, claims, current.signals ?? []);
     return;
   }
 
@@ -139,8 +152,8 @@ async function applyEvent(
     const signals = [...(current.signals ?? []), event.signal].sort(
       (a, b) => a.startSeconds - b.startSeconds,
     );
-    await setState({ signals });
-    await sendMarkers(tabId, current.claims, signals);
+    await setState({ signals }, runId);
+    if (!textMode) await sendMarkers(tabId, current.claims, signals);
     return;
   }
 
@@ -154,13 +167,13 @@ async function applyEvent(
       mode: response.mode,
       error: undefined,
       progress: undefined,
-    });
-    await sendMarkers(tabId, response.claims, response.signals ?? []);
+    }, runId);
+    if (!textMode && activeRun === runId) await sendMarkers(tabId, response.claims, response.signals ?? []);
     return;
   }
 
   if (event.type === "error") {
-    await setState({ status: "failed", error: event.message, warnings: [] });
+    await setState({ status: "failed", error: event.message, warnings: [] }, runId);
     return;
   }
 
@@ -205,17 +218,28 @@ async function checkVideo(
   transcript: TranscriptSegment[] | undefined,
   tabId?: number,
 ): Promise<void> {
+  controller?.abort();
+  const abort = new AbortController();
+  controller = abort;
+  const runId = crypto.randomUUID();
+  activeRun = runId;
   await setState({
     video,
+    textSelection: undefined,
+    sourceTabId: tabId,
+    selectedClaimId: undefined,
+    progress: undefined,
+    mode: undefined,
     status: "loading_transcript",
     claims: [],
     signals: [],
     warnings: [],
     error: undefined,
-  });
+  }, runId);
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/v1/check/stream`, {
+      signal: abort.signal,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ video, url, transcript: transcript ?? [] }),
@@ -224,15 +248,62 @@ async function checkVideo(
     if (!response.ok) throw new Error(`Backend returned ${response.status}`);
     if (!response.body) throw new Error("The backend returned no response stream.");
 
-    await readStream(response.body, (event) => applyEvent(event, video, tabId));
+    await readStream(response.body, (event) => applyEvent(event, runId, tabId));
   } catch (error) {
-    if (!(await stillCurrent(video.id))) return;
+    if (!(await stillCurrent(runId))) return;
     const message = error instanceof Error ? error.message : "The fact-checking service is unavailable.";
-    await setState({ status: "failed", error: message, warnings: [] });
+    await setState({ status: "failed", error: message, warnings: [] }, runId);
+  }
+}
+
+function startText(selection: TextSelection, tabId?: number): void {
+  void checkText(selection, tabId);
+}
+
+async function checkText(selection: TextSelection, tabId?: number): Promise<void> {
+  const text = selection.text.trim();
+  controller?.abort();
+  const abort = new AbortController();
+  controller = abort;
+  const runId = crypto.randomUUID();
+  activeRun = runId;
+  selection = { ...selection, text, pageTitle: selection.pageTitle.slice(0, 500), context: selection.context.slice(0, 1500) };
+  const valid = text.length >= 30 && text.length <= 3000;
+  const startingState: SessionState = { ...initialState, status: valid ? "extracting_claims" : "failed", video: undefined, textRunId: runId,
+    textSelection: selection, sourceTabId: tabId, selectedClaimId: undefined,
+    error: valid ? undefined : "Zaznacz od 30 do 3000 znaków.", mode: undefined, progress: undefined };
+  // Dispatch the loading popup before storage/network work, including when
+  // checking text from the browser's context menu.
+  const popup = tabId === undefined ? Promise.resolve() : chrome.tabs.sendMessage(tabId,
+    { type: "TEXT_CHECK_UPDATE", state: startingState, show: true }, { frameId: 0 });
+  void popup.catch(() => { void openSidePanel(tabId); });
+  await setState(startingState, runId);
+  // On protected pages / tabs not refreshed since installation, use the existing
+  // results view rather than leaving the context-menu action without feedback.
+  await popup.catch(() => undefined);
+  if (!valid) return;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/check/text/stream`, {
+      method: "POST", signal: abort.signal, headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(selection),
+    });
+    if (!response.ok) throw new Error(`Text check returned ${response.status}`);
+    if (!response.body) throw new Error("No response stream.");
+    await readStream(response.body, event => applyEvent(event, runId, tabId, true));
+    const final = await getState();
+    if (activeRun === runId && !["complete", "no_claims", "failed"].includes(final.status))
+      throw new Error("Połączenie przerwano przed zakończeniem analizy.");
+  } catch (error) {
+    if (!(await stillCurrent(runId))) return;
+    await setState({ status: "failed", error: error instanceof Error ? error.message : "Text check unavailable.", progress: undefined }, runId);
   }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: "check-selection", title: "Zweryfikuj zaznaczony tekst",
+      contexts: ["selection"], documentUrlPatterns: ["http://*/*", "https://*/*"] });
+  });
   void chrome.storage.session.set({ state: initialState });
   // Guarded: on browsers without the Side Panel API this throws and takes the
   // rest of the install handler down with it.
@@ -241,21 +312,50 @@ chrome.runtime.onInstalled.addListener(() => {
   }
 });
 
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== "check-selection" || info.editable || !info.selectionText) return;
+  const url = new URL(info.frameUrl ?? info.pageUrl ?? tab?.url ?? "https://example.invalid");
+  url.search = ""; url.hash = "";
+  startText({ text: info.selectionText, pageUrl: url.href, pageTitle: tab?.title ?? "", context: "" }, tab?.id);
+});
+
 chrome.action.onClicked.addListener((tab) => {
   void openSidePanel(tab.id);
 });
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
+  if (message.type === "OPEN_TEXT_DETAILS") {
+    if (activeRun && activeRun !== message.runId) {
+      sendResponse({ error: "Uruchomiono już inną analizę. Sprawdź fragment ponownie." });
+    } else {
+      void openSidePanel(sender.tab?.id);
+      sendResponse({ ok: true });
+    }
+    return false;
+  }
+  if (message.type === "CHECK_TEXT") {
+    startText(message.selection, sender.tab?.id);
+    return false;
+  }
+  if (message.type === "RETRY_TEXT") {
+    void getState().then(current => {
+      if (current.textSelection) void checkText(current.textSelection, current.sourceTabId);
+    });
+    return false;
+  }
   if (message.type === "GET_STATE") {
     void getState().then(sendResponse);
     return true;
   }
 
   if (message.type === "CHECK_STARTED") {
+    controller?.abort();
+    activeRun = "";
     // Opening the panel must happen while the user's click is still the
     // active gesture, so this handler does nothing slow.
     void setState({
       video: message.video,
+      textSelection: undefined,
       status: "loading_transcript",
       claims: [],
       signals: [],
@@ -268,20 +368,29 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   }
 
   if (message.type === "TRANSCRIPT_READY") {
-    void checkVideo(message.video, message.url, message.transcript, sender.tab?.id);
+    void getState().then(current => {
+      if (!current.textSelection && current.video?.id === message.video.id)
+        void checkVideo(message.video, message.url, message.transcript, sender.tab?.id);
+    });
     return false;
   }
 
   if (message.type === "VIDEO_CHANGED") {
-    void setState({
-      video: message.video ?? undefined,
-      status: message.video ? "ready" : "unsupported",
-      claims: [],
-      signals: [],
-      warnings: [],
-      mode: undefined,
-      error: undefined,
-      selectedClaimId: undefined,
+    void getState().then(current => {
+      if (current.textSelection) return;
+      controller?.abort();
+      activeRun = "";
+      void setState({
+        video: message.video ?? undefined,
+        status: message.video ? "ready" : "unsupported",
+        claims: [],
+        signals: [],
+        warnings: [],
+        mode: undefined,
+        error: undefined,
+        selectedClaimId: undefined,
+        progress: undefined,
+      });
     });
     return false;
   }
@@ -317,6 +426,8 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   }
 
   if (message.type === "CLEAR_SESSION") {
+    controller?.abort();
+    activeRun = "";
     void chrome.storage.session.set({ state: initialState }).then(() => sendResponse({ ok: true }));
     return true;
   }

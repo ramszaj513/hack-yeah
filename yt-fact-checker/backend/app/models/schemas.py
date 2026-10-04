@@ -96,6 +96,21 @@ class CheckRequest(BaseModel):
     transcript: list[TranscriptSegment] = Field(default_factory=list, max_length=2000)
 
 
+class TextCheckRequest(BaseModel):
+    text: str = Field(min_length=30, max_length=3000)
+    pageUrl: HttpUrl | None = None
+    pageTitle: str = Field(default="", max_length=500)
+    context: str = Field(default="", max_length=1500)
+
+    @field_validator("text")
+    @classmethod
+    def meaningful_selection(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 30:
+            raise ValueError("Select at least 30 characters")
+        return value
+
+
 class Context(BaseModel):
     country: str | None = None
     timeframe: str | None = None

@@ -153,6 +153,9 @@ export type StreamEvent =
   | { type: "error"; message: string };
 
 export interface SessionState {
+  textRunId?: string;
+  textSelection?: TextSelection;
+  sourceTabId?: number;
   video?: VideoMetadata;
   status: AnalysisStatus;
   claims: Claim[];
@@ -164,7 +167,17 @@ export interface SessionState {
   progress?: Progress;
 }
 
+export interface TextSelection {
+  text: string;
+  pageUrl: string;
+  pageTitle: string;
+  context: string;
+}
+
 export type RuntimeMessage =
+  | { type: "CHECK_TEXT"; selection: TextSelection }
+  | { type: "RETRY_TEXT" }
+  | { type: "OPEN_TEXT_DETAILS"; runId: string }
   | { type: "CHECK_STARTED"; video: VideoMetadata; url: string }
   | { type: "TRANSCRIPT_READY"; video: VideoMetadata; url: string; transcript?: TranscriptSegment[] }
   | { type: "VIDEO_CHANGED"; video: VideoMetadata | null }

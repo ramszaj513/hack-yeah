@@ -30,6 +30,13 @@ const labels: Record<Verdict, string> = {
   context_needed: "Needs context",
   couldnt_verify: "Unverified",
 };
+const textLabels: Record<Verdict, string> = {
+  false: "Fałszywe", potentially_false: "Wątpliwe", misleading: "Wprowadzające w błąd",
+  supported: "Potwierdzone", context_needed: "Wymaga kontekstu", couldnt_verify: "Nie udało się zweryfikować",
+};
+function verdictLabel(verdict: Verdict): string {
+  return state.textSelection ? textLabels[verdict] : labels[verdict];
+}
 
 /** Shown only on a claim that went unresolved, where the reason changes how
  *  much weight the result deserves. Everything else is left unexplained. */
@@ -51,6 +58,12 @@ const techniques: Record<Technique, string> = {
   conspiracy_framing: "Conspiracy framing",
   political_framing: "One-sided framing",
   unfalsifiable: "Unfalsifiable",
+};
+const textTechniques: Record<Technique, string> = {
+  undisclosed_ad: "Ukryta promocja", emotional_manipulation: "Presja emocjonalna",
+  loaded_language: "Język sugerujący ocenę", logical_fallacy: "Błąd logiczny",
+  cherry_picking: "Wybiórcze dowody", conspiracy_framing: "Narracja spiskowa",
+  political_framing: "Jednostronne przedstawienie", unfalsifiable: "Twierdzenie nieweryfikowalne",
 };
 
 let state: SessionState = { status: "ready", claims: [], signals: [], warnings: [] };
@@ -147,10 +160,16 @@ function renderClaim(claim: Claim): HTMLElement {
 
   const head = document.createElement("div");
   head.className = "claim-head";
-  head.append(el("span", labels[claim.verdict], `badge ${claim.verdict}`), seekButton(claim.startSeconds));
+  head.append(el("span", verdictLabel(claim.verdict), `badge ${claim.verdict}`));
+  if (!state.textSelection) head.append(seekButton(claim.startSeconds));
   article.append(head, el("p", claim.text, "claim-text"));
+  if (state.textSelection && claim.quote) article.append(el("p", `“${claim.quote}”`, "said"));
 
   if (claim.basis) article.append(el("p", claim.basis, "basis"));
+  if (state.textSelection && claim.verdict !== "couldnt_verify") {
+    const certainty = claim.confidence >= .8 ? "wysoka" : claim.confidence >= .5 ? "umiarkowana" : "niska";
+    article.append(el("p", `Pewność oceny modelu: ${certainty}. To nie jest prawdopodobieństwo prawdziwości.`, "reason"));
+  }
   if (claim.unverifiedReason) article.append(el("p", reasons[claim.unverifiedReason], "reason"));
 
   if (claim.evidence.length > 0) {
@@ -168,7 +187,8 @@ function renderSignal(signal: Signal): HTMLElement {
 
   const head = document.createElement("div");
   head.className = "claim-head";
-  head.append(el("span", techniques[signal.technique], "badge signal"), seekButton(signal.startSeconds));
+  head.append(el("span", state.textSelection ? textTechniques[signal.technique] : techniques[signal.technique], "badge signal"));
+  if (!state.textSelection) head.append(seekButton(signal.startSeconds));
   article.append(head, el("p", signal.note, "claim-text"), el("p", `“${signal.quote}”`, "said"));
   return article;
 }
@@ -222,6 +242,15 @@ const BUSY: SessionState["status"][] = [
 ];
 
 function statusLine(): string {
+  if (state.textSelection) {
+    switch (state.status) {
+      case "extracting_claims": return "Wyszukiwanie twierdzeń w zaznaczeniu…";
+      case "gathering_evidence": return "Zbieranie źródeł…";
+      case "reviewing_results": return "Sprawdzanie dowodów i cytatów…";
+      case "no_claims": return "Ten fragment nie zawiera faktów możliwych do sprawdzenia. Może być opinią lub oceną.";
+      case "failed": return state.error ?? "Nie udało się sprawdzić tekstu.";
+    }
+  }
   switch (state.status) {
     case "ready":
       return "";
@@ -254,7 +283,7 @@ function render(): void {
 
   const header = document.createElement("div");
   header.className = "header";
-  header.append(el("h1", "Fact check"));
+  header.append(el("h1", state.textSelection ? "Weryfikacja tekstu" : "Fact check"));
 
   const tools = document.createElement("div");
   tools.className = "tools";
@@ -273,6 +302,42 @@ function render(): void {
   const busy = BUSY.includes(state.status);
   const claims = visibleClaims();
   const signals = visibleSignals();
+
+  if (state.textSelection) {
+    const selection = state.textSelection;
+    const summary = document.createElement("section");
+    summary.className = "selection-summary";
+    summary.append(el("p", "Zaznaczony fragment", "selection-label"));
+    summary.append(el("blockquote", selection.text, "selection-quote"));
+    const source = document.createElement("a");
+    if (/^https?:\/\//.test(selection.pageUrl)) source.href = selection.pageUrl;
+    source.target = "_blank";
+    source.rel = "noopener noreferrer";
+    source.textContent = selection.pageTitle || new URL(selection.pageUrl).hostname;
+    summary.append(source);
+    shell.append(summary);
+    shell.append(el("p", "Analizujemy wybrany fragment i najbliższy kontekst. Ocena sposobu argumentacji nie jest dowodem fałszu.", "warning"));
+    const actions = document.createElement("div");
+    actions.className = "text-actions";
+    const retry = document.createElement("button");
+    retry.className = "check"; retry.type = "button";
+    retry.textContent = "Sprawdź ponownie"; retry.disabled = busy;
+    retry.addEventListener("click", () => void send({ type: "RETRY_TEXT" }));
+    actions.append(retry);
+    if (!busy && state.claims.length > 0) {
+      const copy = document.createElement("button");
+      copy.className = "check"; copy.type = "button"; copy.textContent = "Kopiuj wynik";
+      copy.addEventListener("click", () => {
+        const report = [selection.text, selection.pageUrl, ...state.claims.map(claim =>
+          `${verdictLabel(claim.verdict)}: ${claim.text}\n${claim.basis}\n${claim.evidence.map(item => item.url).join("\n")}`),
+          ...state.warnings].join("\n\n");
+        void navigator.clipboard.writeText(report).then(() => { copy.textContent = "Skopiowano"; })
+          .catch(() => { copy.textContent = "Nie udało się skopiować"; });
+      });
+      actions.append(copy);
+    }
+    shell.append(actions);
+  }
 
   if (state.status === "ready" || state.status === "unsupported") {
     const check = document.createElement("button");
@@ -310,21 +375,21 @@ function render(): void {
   for (const verdict of order) {
     const group = claims.filter((claim) => claim.verdict === verdict);
     if (group.length === 0) continue;
-    const title = el("h2", labels[verdict], "group-title");
+    const title = el("h2", verdictLabel(verdict), "group-title");
     title.append(el("span", String(group.length)));
     shell.append(title);
     for (const claim of group) shell.append(renderClaim(claim));
   }
 
   if (signals.length > 0) {
-    const title = el("h2", "How it's argued", "group-title");
+    const title = el("h2", state.textSelection ? "Sposób argumentacji" : "How it's argued", "group-title");
     title.append(el("span", String(signals.length)));
     shell.append(title);
     for (const signal of signals) shell.append(renderSignal(signal));
   }
 
   if (state.status === "complete" && claims.length === 0 && signals.length === 0) {
-    shell.append(el("p", "Nothing to flag.", "empty"));
+    shell.append(el("p", state.textSelection ? "Brak widocznych wyników. To nie oznacza, że cały fragment został potwierdzony." : "Nothing to flag.", "empty"));
   }
 
   app.append(shell);

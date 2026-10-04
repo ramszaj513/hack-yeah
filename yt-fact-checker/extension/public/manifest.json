@@ -3,7 +3,7 @@
   "name": "yt-fact-checker",
   "version": "0.1.0",
   "description": "Inspect factual claims in YouTube videos with evidence links.",
-  "permissions": ["sidePanel", "storage", "tabs"],
+  "permissions": ["sidePanel", "storage", "tabs", "contextMenus"],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://youtube.com/*",
@@ -23,6 +23,10 @@
     "default_path": "sidepanel.html"
   },
   "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["selection.js"]
+    },
     {
       "matches": ["https://www.youtube.com/watch*", "https://youtube.com/watch*"],
       "js": ["content.js"]

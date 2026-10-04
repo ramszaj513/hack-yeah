@@ -133,3 +133,12 @@ h1 { margin: 0; font-size: 16px; font-weight: 500; letter-spacing: -.01em; }
 .claim.signal.severity-high { border-left-color: #a97fd4; }
 .badge.signal { color: #9bb0d6; }
 .claim.signal.severity-high .badge.signal { color: #c4a2e8; }
+
+.selection-summary { padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.selection-label { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+.selection-quote { margin: 0 0 12px; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.selection-summary a { display: block; font-size: 12px; overflow-wrap: anywhere; }
+.text-actions { display: flex; gap: 8px; margin-top: 16px; }
+.text-actions .check { font-size: 12px; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .progress-fill { transition: none; } }
