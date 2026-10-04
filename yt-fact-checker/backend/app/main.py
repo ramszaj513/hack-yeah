@@ -66,18 +66,36 @@ async def health() -> dict[str, str]:
     }
 
 
-def _ensure_transcript(request: CheckRequest) -> CheckResponse | None:
+# YouTube throttles server-side callers without answering, so this fetch can
+# hang indefinitely. It is also synchronous, which would block the event loop
+# for every other request while it waited.
+TRANSCRIPT_TIMEOUT_SECONDS = 15.0
+
+
+async def _ensure_transcript(request: CheckRequest) -> CheckResponse | None:
     """Fill in the transcript server-side when the extension didn't supply one."""
     if request.transcript:
         return None
-    try:
-        request.transcript = fetch_english_transcript(request.video.id)
-    except TranscriptUnavailable:
+
+    def unavailable(detail: str) -> CheckResponse:
         return CheckResponse(
             analysisId=str(uuid4()),
             status="no_transcript",
             mode="live",
-            warnings=[NO_TRANSCRIPT],
+            warnings=[detail],
+        )
+
+    try:
+        request.transcript = await asyncio.wait_for(
+            asyncio.to_thread(fetch_english_transcript, request.video.id),
+            timeout=TRANSCRIPT_TIMEOUT_SECONDS,
+        )
+    except TranscriptUnavailable:
+        return unavailable(NO_TRANSCRIPT)
+    except asyncio.TimeoutError:
+        return unavailable(
+            "YouTube did not return captions in time. Captions are normally read in your "
+            "browser; this fallback is often throttled."
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Could not fetch the YouTube transcript.") from exc
@@ -86,7 +104,7 @@ def _ensure_transcript(request: CheckRequest) -> CheckResponse | None:
 
 @app.post("/api/v1/check", response_model=CheckResponse)
 async def check_video(request: CheckRequest) -> CheckResponse:
-    early = _ensure_transcript(request)
+    early = await _ensure_transcript(request)
     if early is not None:
         return early
 
@@ -117,7 +135,7 @@ async def check_video_stream(request: CheckRequest) -> StreamingResponse:
 
         async def run() -> None:
             try:
-                early = _ensure_transcript(request)
+                early = await _ensure_transcript(request)
                 if early is not None:
                     await queue.put({"type": "complete", "response": early.model_dump(mode="json")})
                     return
